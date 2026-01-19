@@ -43,7 +43,8 @@ export const createTopTexture = (width: number, depth: number, color: string) =>
   if (textureCache[cacheKey]) return textureCache[cacheKey];
 
   const canvas = document.createElement('canvas');
-  const size = 512;
+  // OPTIMIZATION: Reduced from 512 to 256 for better performance on old GPUs
+  const size = 256; 
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
@@ -62,7 +63,7 @@ export const createTopTexture = (width: number, depth: number, color: string) =>
 
     // Bevel Border
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 15;
+    ctx.lineWidth = 8; // Scaled down for 256px
     ctx.strokeRect(0,0,size,size);
 
     // Draw Logo
@@ -86,8 +87,9 @@ export const createSideTexture = (width: number, height: number, color: string, 
   if (textureCache[cacheKey]) return textureCache[cacheKey];
 
   const canvas = document.createElement('canvas');
-  const texW = 512;
-  const texH = 256; 
+  // OPTIMIZATION: Reduced texture size
+  const texW = 256;
+  const texH = 128; 
   canvas.width = texW;
   canvas.height = texH;
   const ctx = canvas.getContext('2d');
@@ -105,7 +107,7 @@ export const createSideTexture = (width: number, height: number, color: string, 
 
     // Border
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 12;
+    ctx.lineWidth = 6;
     ctx.strokeRect(0, 0, texW, texH);
 
     // Text "ЛАМБРОТИН"
@@ -116,22 +118,22 @@ export const createSideTexture = (width: number, height: number, color: string, 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0,0,0,0.1)';
-        ctx.shadowOffsetY = 2;
-        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 1;
+        ctx.shadowBlur = 2;
         
         // Dynamic font sizing
         // Start large and scale down
-        let fontSize = 100;
+        let fontSize = 50; // Scaled for smaller texture
         ctx.font = `900 ${fontSize}px "Inter"`;
         
-        const padding = 60;
+        const padding = 30;
         const maxWidth = texW - padding;
         
         let textMetrics = ctx.measureText(russianText);
         
         // Scale down if too wide
-        while (textMetrics.width > maxWidth && fontSize > 20) {
-            fontSize -= 5;
+        while (textMetrics.width > maxWidth && fontSize > 10) {
+            fontSize -= 2;
             ctx.font = `900 ${fontSize}px "Inter"`;
             textMetrics = ctx.measureText(russianText);
         }
@@ -142,7 +144,7 @@ export const createSideTexture = (width: number, height: number, color: string, 
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  // texture.anisotropy = 4; // OPTIMIZATION: Remove anisotropy for performance
   textureCache[cacheKey] = texture;
   return texture;
 };

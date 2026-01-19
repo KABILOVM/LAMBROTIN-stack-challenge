@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, forwardRef, memo, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
@@ -6,7 +7,7 @@ import { GAME_CONFIG } from '../../constants';
 import { sounds as gameSounds } from '../../services/SoundService';
 import { createTopTexture, createSideTexture } from './TextureGen';
 
-// Fix for missing JSX types in some environments to resolve "Property does not exist on type JSX.IntrinsicElements"
+// Fix for missing JSX types in some environments
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -16,12 +17,13 @@ declare global {
       directionalLight: any;
       pointLight: any;
       ringGeometry: any;
+      meshLambertMaterial: any;
       meshBasicMaterial: any;
     }
   }
 }
 
-// Augment 'react' module directly for React 18+ setups where JSX is namespaced
+// Augment 'react' module directly
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
@@ -31,6 +33,7 @@ declare module 'react' {
       directionalLight: any;
       pointLight: any;
       ringGeometry: any;
+      meshLambertMaterial: any;
       meshBasicMaterial: any;
     }
   }
@@ -73,13 +76,12 @@ interface GameProps {
 
 // --- Background Color Logic ---
 
-// Compressed stages for faster visual feedback
 const BG_STAGES = [
-    { score: 0, top: [214, 232, 245], bottom: [174, 217, 224] },   // Morning (d6e8f5 -> aed9e0)
-    { score: 5, top: [137, 247, 254], bottom: [102, 166, 255] },   // Day (89f7fe -> 66a6ff)
-    { score: 10, top: [250, 112, 154], bottom: [254, 225, 64] },   // Sunset (fa709a -> fee140)
-    { score: 20, top: [48, 207, 208], bottom: [51, 8, 103] },      // Twilight (30cfd0 -> 330867)
-    { score: 40, top: [15, 12, 41], bottom: [36, 36, 62] }         // Space (0f0c29 -> 24243e)
+    { score: 0, top: [214, 232, 245], bottom: [174, 217, 224] },
+    { score: 5, top: [137, 247, 254], bottom: [102, 166, 255] },
+    { score: 10, top: [250, 112, 154], bottom: [254, 225, 64] },
+    { score: 20, top: [48, 207, 208], bottom: [51, 8, 103] },
+    { score: 40, top: [15, 12, 41], bottom: [36, 36, 62] }
 ];
 
 const interpolateColor = (color1: number[], color2: number[], factor: number) => {
@@ -91,7 +93,6 @@ const interpolateColor = (color1: number[], color2: number[], factor: number) =>
 };
 
 const getGradientForScore = (score: number) => {
-    // Find the stage we are in
     let startStage = BG_STAGES[0];
     let endStage = BG_STAGES[BG_STAGES.length - 1];
 
@@ -107,14 +108,12 @@ const getGradientForScore = (score: number) => {
         }
     }
 
-    // Calculate percentage between stages
     let range = endStage.score - startStage.score;
     let progress = 0;
     if (range > 0) {
         progress = (score - startStage.score) / range;
     }
     
-    // Clamp progress
     progress = Math.max(0, Math.min(1, progress));
 
     const topColor = interpolateColor(startStage.top, endStage.top, progress);
@@ -128,16 +127,9 @@ const getGradientForScore = (score: number) => {
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
 const getBlockColor = (i: number) => {
-  // Enhanced Palette
   const palette = [
-    '#48cfae', // Mint
-    '#37bc9b', // Darker Teal
-    '#4fc1e9', // Sky Blue
-    '#3bafda', // Ocean Blue
-    '#967adc', // Soft Purple
-    '#ac92ec', // Lavender
-    '#e9573f', // Soft Red
-    '#f6bb42', // Warm Yellow
+    '#48cfae', '#37bc9b', '#4fc1e9', '#3bafda',
+    '#967adc', '#ac92ec', '#e9573f', '#f6bb42',
   ];
   return palette[i % palette.length];
 };
@@ -157,17 +149,18 @@ const checkAABBCollision = (pos1: number[], size1: number[], pos2: number[], siz
 
 // --- Components ---
 
+// OPTIMIZATION: Using MeshLambertMaterial instead of Standard for performance
 const BlockMesh = memo(({ data }: { data: BlockData }) => {
   const topTexture = useMemo(() => createTopTexture(data.size[0], data.size[2], data.color), [data.size, data.color]);
   const sideTexture = useMemo(() => createSideTexture(data.size[0], GAME_CONFIG.BOX_HEIGHT, data.color, "ЛАМБРОТИН"), [data.size, data.color]);
   
   const materials = useMemo(() => [
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: topTexture }),  
-    new THREE.MeshStandardMaterial({ color: data.color }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: topTexture }),  
+    new THREE.MeshLambertMaterial({ color: data.color }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
   ], [sideTexture, topTexture, data.color]);
 
   return (
@@ -176,8 +169,8 @@ const BlockMesh = memo(({ data }: { data: BlockData }) => {
       geometry={boxGeo} 
       material={materials}
       scale={[data.size[0], GAME_CONFIG.BOX_HEIGHT, data.size[2]]}
-      castShadow
-      receiveShadow
+      // castShadow // Disabled for performance
+      // receiveShadow // Disabled for performance
     />
   );
 });
@@ -188,22 +181,30 @@ const DebrisBox = memo(({ data, stack }: { data: DebrisData, stack: BlockData[] 
   const rot = useRef(new THREE.Euler(...data.rotation));
   const vel = useRef(new THREE.Vector3(...data.velocity));
   const angVel = useRef(new THREE.Vector3(...data.angularVelocity));
+  const active = useRef(true);
   
   const topTexture = useMemo(() => createTopTexture(data.size[0], data.size[2], data.color), [data.size, data.color]);
   const sideTexture = useMemo(() => createSideTexture(data.size[0], GAME_CONFIG.BOX_HEIGHT, data.color, "ЛАМБРОТИН"), [data.size, data.color]);
   
   const materials = useMemo(() => [
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: topTexture }), 
-    new THREE.MeshStandardMaterial({ color: data.color }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: topTexture }), 
+    new THREE.MeshLambertMaterial({ color: data.color }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
   ], [sideTexture, topTexture, data.color]);
 
   useFrame((_, delta) => {
-    if (!meshRef.current) return;
+    if (!meshRef.current || !active.current) return;
     
+    // Optimization: Stop simulating if far below
+    if (pos.current.y < -20) {
+        active.current = false;
+        meshRef.current.visible = false;
+        return;
+    }
+
     const gravity = -25;
     vel.current.y += gravity * delta;
     pos.current.add(vel.current.clone().multiplyScalar(delta));
@@ -239,7 +240,7 @@ const DebrisBox = memo(({ data, stack }: { data: DebrisData, stack: BlockData[] 
       geometry={boxGeo} 
       material={materials}
       scale={[data.size[0], GAME_CONFIG.BOX_HEIGHT, data.size[2]]}
-      castShadow
+      // castShadow // Disabled for performance
     />
   );
 });
@@ -272,12 +273,12 @@ const ActiveBox = forwardRef<THREE.Vector3, { data: BlockData, direction: 'x' | 
   const sideTexture = useMemo(() => createSideTexture(props.data.size[0], GAME_CONFIG.BOX_HEIGHT, props.data.color, "ЛАМБРОТИН"), [props.data.size, props.data.color]);
   
   const materials = useMemo(() => [
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: topTexture }), 
-    new THREE.MeshStandardMaterial({ color: props.data.color }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
-    new THREE.MeshStandardMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: topTexture }), 
+    new THREE.MeshLambertMaterial({ color: props.data.color }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
+    new THREE.MeshLambertMaterial({ map: sideTexture }), 
   ], [sideTexture, topTexture, props.data.color]);
 
   useFrame((_, delta) => {
@@ -302,7 +303,7 @@ const ActiveBox = forwardRef<THREE.Vector3, { data: BlockData, direction: 'x' | 
       geometry={boxGeo} 
       material={materials}
       scale={[props.data.size[0], GAME_CONFIG.BOX_HEIGHT, props.data.size[2]]}
-      castShadow
+      // castShadow // Disabled
     />
   );
 });
@@ -335,7 +336,6 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
   const updateBG = (score: number) => {
     const bgEl = document.getElementById('game-background');
     if (!bgEl) return;
-    // Apply the smoothly interpolated gradient
     bgEl.style.background = getGradientForScore(score);
   };
 
@@ -348,12 +348,9 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
     const idx = prev.index + 1;
     const dir = idx % 2 === 0 ? 'x' : 'z';
     
-    // Dynamic Speed Logic
-    // Every 3 blocks, we increase the speed multiplier
     const speedStep = Math.floor(idx / 3);
     let currentSpeed = GAME_CONFIG.BASE_SPEED + (speedStep * GAME_CONFIG.BASE_SPEED_INCREMENT);
     
-    // Cap velocity
     if (currentSpeed > GAME_CONFIG.MAX_SPEED) {
         currentSpeed = GAME_CONFIG.MAX_SPEED;
     }
@@ -362,7 +359,7 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
       data: { position: [prev.position[0], prev.position[1] + GAME_CONFIG.BOX_HEIGHT, prev.position[2]], size: [...prev.size], color: getBlockColor(idx), index: idx },
       direction: dir, 
       limit: 5.2, 
-      moveSpeed: currentSpeed * 65 // Apply standard multiplier
+      moveSpeed: currentSpeed * 65 
     });
   };
 
@@ -407,7 +404,8 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
         const centerOffset = (size / 2) + (overhang / 2); 
         dPos[axis] = prev.position[axis] + (sign * centerOffset);
         
-        return [...d.slice(-15), { 
+        // OPTIMIZATION: Reduce Debris count from 15 to 8
+        return [...d.slice(-8), { 
           id: Math.random(), 
           position: dPos, 
           size: dSize, 
@@ -463,7 +461,6 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
       return;
     }
 
-    // Camera Logic
     const targetY = totalHeight;
     state.camera.position.lerp(new THREE.Vector3(18, targetY + 10, 18), 0.05);
     camLookAt.current.lerp(new THREE.Vector3(0, totalHeight - 2, 0), 0.05);
@@ -472,14 +469,15 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
 
   return (
     <group>
-      <ambientLight intensity={0.8} />
+      <ambientLight intensity={0.9} />
       <directionalLight 
         position={[20, 30, 10]} 
-        intensity={1.0} 
-        castShadow 
-        shadow-mapSize={[1024, 1024]} 
+        intensity={1.2} 
+        // Disabled Shadows for optimization
+        // castShadow 
+        // shadow-mapSize={[1024, 1024]} 
       />
-      <pointLight position={[-10, 10, -10]} intensity={0.3} color="#ffffff" />
+      <pointLight position={[-10, 10, -10]} intensity={0.4} color="#ffffff" />
       <group>
           {stack.map(b => <BlockMesh key={b.index} data={b} />)}
       </group>
@@ -504,9 +502,11 @@ export const BelindaStackGame = ({ onGameOver, onScoreUpdate, gameState, onGameS
       triggerClickRef.current();
     }}>
       <Canvas 
-        shadows
-        dpr={window.devicePixelRatio > 2 ? 2 : window.devicePixelRatio} 
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace }} 
+        // shadows // Disabled shadows globally
+        // OPTIMIZATION: Cap DPR at 1.5 to save battery/performance on high-res mobile
+        dpr={[1, 1.5]}
+        // OPTIMIZATION: Disable antialias (expensive on mobile)
+        gl={{ antialias: false, toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace }} 
       >
         <OrthographicCamera makeDefault position={[18, 18, 18]} zoom={45} near={-50} far={200} />
         <GameScene onGameOver={onGameOver} onScoreUpdate={onScoreUpdate} onGameStart={onGameStart} triggerClick={triggerClickRef} gameState={gameState} />

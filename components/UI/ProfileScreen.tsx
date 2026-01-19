@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
-import { User, GameResult, Language, PrizeConfig } from '../../types';
+import { User, GameResult, Language, PrizeConfig, PromoCode } from '../../types';
 import { backend } from '../../services/mockBackend';
 import { PrizeIcon } from './PrizeIcons';
 import { t } from '../../translations';
 
+// --- ICONS ---
 const CheckIcon = () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5" strokeWidth={3}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -16,6 +18,67 @@ const LockIcon = () => (
     </svg>
 );
 
+const TrophyIcon = () => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <path fillRule="evenodd" d="M5.166 2.621v.858c-1.035.148-2.059.33-3.071.543a.75.75 0 00-.584.859 6.753 6.753 0 006.138 5.6 6.73 6.73 0 002.743 1.346A6.707 6.707 0 019.279 15H8.54c-1.036 0-1.875.84-1.875 1.875V19.5h-.75a2.25 2.25 0 00-2.25 2.25c0 .414.336.75.75.75h14.25a.75.75 0 00.75-.75 2.25 2.25 0 00-2.25-2.25h-.75v-2.625c0-1.036-.84-1.875-1.875-1.875h-.739a6.706 6.706 0 01-1.112-3.173 6.73 6.73 0 002.743-1.347 6.753 6.753 0 006.139-5.6.75.75 0 00-.585-.858 47.077 47.077 0 00-3.07-.543V2.62a.75.75 0 00-.658-.744 49.22 49.22 0 00-6.093-.377c-2.063 0-4.096.128-6.093.377a.75.75 0 00-.657.744zm0 2.629c0 1.196.312 2.32.857 3.294A5.266 5.266 0 013.16 5.337a45.6 45.6 0 012.006-.348v.262zm9.42 3.294c.546-.974.857-2.098.857-3.294v-.262c.702.097 1.373.214 2.006.348a5.265 5.265 0 01-2.863 3.208z" clipRule="evenodd" />
+    </svg>
+);
+
+const GiftIcon = () => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <path fillRule="evenodd" d="M5.25 2.25a3 3 0 00-3 3v4.318a3 3 0 00.997 2.397l.32.274a2.25 2.25 0 01.996 1.714V19.5a3 3 0 003 3h8.25a3 3 0 003-3v-5.857a2.25 2.25 0 01.996-1.714l.32-.274a3 3 0 00.997-2.397V5.25a3 3 0 00-3-3H5.25zm1.5 8.25V5.25a1.5 1.5 0 011.5-1.5h2.25v6.75H6.75zm10.5 0h-3.75V3.75H16.5a1.5 1.5 0 011.5 1.5v5.25z" clipRule="evenodd" />
+    </svg>
+);
+
+const ClockIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+const Countdown = ({ lang }: { lang: Language }) => {
+    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0 });
+    const T = t[lang];
+
+    useEffect(() => {
+        const calculateTimeLeft = () => {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            // End of February (Month index 2 is March, day 0 is last day of Feb)
+            const endOfFeb = new Date(currentYear, 2, 0, 23, 59, 59); 
+            
+            // If February passed this year, look at next year
+            if (now > endOfFeb) {
+                endOfFeb.setFullYear(currentYear + 1);
+            }
+
+            const difference = endOfFeb.getTime() - now.getTime();
+            
+            if (difference > 0) {
+                setTimeLeft({
+                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+                });
+            }
+        };
+
+        calculateTimeLeft();
+        const timer = setInterval(calculateTimeLeft, 1000 * 60);
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <div className="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-1.5 rounded-lg border border-red-100">
+            <ClockIcon />
+            <span className="text-[9px] font-bold uppercase tracking-wider">
+                {T.timeLeft} <span className="text-red-700">{timeLeft.days} {T.days} {timeLeft.hours} {T.hours}</span>
+            </span>
+        </div>
+    );
+};
+
+// --- TYPES & PROPS ---
+
 interface ProfileScreenProps {
   user: User;
   onBack: () => void;
@@ -24,19 +87,25 @@ interface ProfileScreenProps {
   lang: Language;
   setLang: (l: Language) => void;
   prizes: PrizeConfig[];
+  onPlayCode: (code: string) => void;
+  initialTab?: 'prizes' | 'history' | 'codes';
 }
 
-export const ProfileScreen = ({ user: initialUser, onBack, onLogout, embedded = false, lang, setLang, prizes }: ProfileScreenProps) => {
+// --- COMPONENTS ---
+
+export const ProfileScreen = ({ user: initialUser, onBack, onLogout, embedded = false, lang, setLang, prizes, onPlayCode, initialTab = 'prizes' }: ProfileScreenProps) => {
   const [user, setUser] = useState<User>(initialUser);
   const [bestScore, setBestScore] = useState(0);
   const [loading, setLoading] = useState(false);
   const [tempError, setTempError] = useState<string | null>(null);
   const [gameHistory, setGameHistory] = useState<GameResult[]>([]);
-  const [activeTab, setActiveTab] = useState<'prizes' | 'history'>('prizes');
+  const [myCodes, setMyCodes] = useState<PromoCode[]>([]);
+  const [activeTab, setActiveTab] = useState<'prizes' | 'history' | 'codes'>(initialTab);
+  const [showDeliveryConfirmation, setShowDeliveryConfirmation] = useState(false);
 
   const T = t[lang];
 
-  // Local selection state
+  // Local selection state for prizes
   const [localSelection, setLocalSelection] = useState<string[]>(initialUser.claimedPrizes || []);
 
   useEffect(() => {
@@ -45,6 +114,12 @@ export const ProfileScreen = ({ user: initialUser, onBack, onLogout, embedded = 
       const eligibleGames = userHistory.filter(r => r.codeUsed !== 'TRIAL');
       const max = Math.max(0, ...eligibleGames.map((r: GameResult) => r.score));
       setBestScore(max);
+    });
+    backend.getUserUnusedCodes(user.id).then(codes => {
+        // We get unused, but let's fetch ALL for the history view in "My Codes"
+        backend.getUserCodes(user.id).then(allCodes => {
+             setMyCodes(allCodes);
+        });
     });
   }, [user.id]);
 
@@ -109,12 +184,22 @@ export const ProfileScreen = ({ user: initialUser, onBack, onLogout, embedded = 
     }
   };
 
-  const handleDeliveryRequest = async () => {
+  const handleDeliveryRequestClick = () => {
+      // Check if any prizes are selected
+      if (!localSelection || localSelection.length === 0) {
+          showTempError(T.chooseOne);
+          return;
+      }
+      setShowDeliveryConfirmation(true);
+  };
+
+  const confirmDelivery = async () => {
      setLoading(true);
      try {
          await backend.requestDelivery(user.id);
          const updated = await backend.refreshUser();
          if(updated) setUser(updated);
+         setShowDeliveryConfirmation(false);
      } catch (e: any) {
          showTempError(e.message);
      } finally {
@@ -122,25 +207,22 @@ export const ProfileScreen = ({ user: initialUser, onBack, onLogout, embedded = 
      }
   };
 
-  const confirmedValuable = user.claimedPrizes?.some(pTitle => {
-      const p = prizes.find(cfg => cfg.title === pTitle);
-      return p?.isValuable;
-  });
+  // --- Sub-components (Helpers) ---
 
-  const confirmedBasic = user.claimedPrizes?.some(pTitle => {
-      const p = prizes.find(cfg => cfg.title === pTitle);
-      return p && !p.isValuable;
-  });
-  
-  const selectedValuable = localSelection.find(pTitle => {
-      const p = prizes.find(cfg => cfg.title === pTitle);
-      return p?.isValuable;
-  });
-
+  const confirmedValuable = user.claimedPrizes?.some(pTitle => prizes.find(cfg => cfg.title === pTitle)?.isValuable);
+  const selectedValuable = localSelection.find(pTitle => prizes.find(cfg => cfg.title === pTitle)?.isValuable);
   const hasUnsavedChanges = localSelection.length > (user.claimedPrizes?.length || 0);
-  const canConfirm = hasUnsavedChanges;
-  // Delivery allowed if user has selected at least one prize and not yet requested
-  const canRequestDelivery = (user.claimedPrizes && user.claimedPrizes.length > 0) && !user.deliveryRequested;
+  const canRequestDelivery = (localSelection.length > 0 && !user.deliveryRequested);
+
+  // Sorting Codes: Active First
+  const sortedCodes = [...myCodes].sort((a, b) => {
+      if (a.isUsed === b.isUsed) {
+          // If both active or both used, sort by date desc
+          return new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime();
+      }
+      // Active (false) comes before Used (true)
+      return a.isUsed ? 1 : -1;
+  });
 
   const PrizeCard: React.FC<{ prize: PrizeConfig }> = ({ prize }) => {
     const isConfirmed = user.claimedPrizes?.includes(prize.title);
@@ -148,290 +230,324 @@ export const ProfileScreen = ({ user: initialUser, onBack, onLogout, embedded = 
     const isUnlocked = bestScore >= prize.threshold;
     const progressPercent = Math.min(100, Math.max(0, (bestScore / prize.threshold) * 100));
     
-    let cardStyle = "bg-white border-slate-200 shadow-sm";
-    let buttonText = T.choose;
-    let buttonStyle = "bg-slate-100 text-slate-400";
-    let isDisabled = false;
+    // Logic for visual states
+    let state = 'locked'; // locked, unlocked, selected, confirmed, outOfStock
+    if (prize.isOutOfStock && !isConfirmed) state = 'outOfStock';
+    else if (isConfirmed) state = 'confirmed';
+    else if (isSelectedLocally) state = 'selected';
+    else if (isUnlocked) {
+        // Check if another valuable prize blocks this
+        if (prize.isValuable && (selectedValuable && selectedValuable !== prize.title)) state = 'locked_alt_selected'; 
+        else if (prize.isValuable && confirmedValuable) state = 'locked_already_claimed';
+        else state = 'unlocked';
+    }
 
-    if (prize.isOutOfStock && !isConfirmed) {
-        cardStyle = "bg-slate-50 border-slate-100 opacity-50 grayscale";
-        buttonText = T.outOfStock;
-        buttonStyle = "bg-red-50 text-red-300";
-        isDisabled = true;
-    } else if (isConfirmed) {
-        cardStyle = "bg-blue-600 text-white border-blue-600 shadow-md";
-        buttonText = T.inList;
-        buttonStyle = "bg-white/20 text-white";
-        isDisabled = true;
-    } else if (isSelectedLocally) {
-        cardStyle = "bg-indigo-50 border-indigo-500 shadow-md ring-1 ring-indigo-500";
-        buttonText = T.selected;
-        buttonStyle = "bg-indigo-600 text-white shadow-lg scale-105";
-    } else if (!isUnlocked) {
-        cardStyle = "bg-slate-50 border-slate-100 opacity-80";
-        buttonText = `${T.needPoints} ${prize.threshold}`;
-        isDisabled = false; 
-    } else {
-        if (prize.isValuable && selectedValuable && selectedValuable !== prize.title) {
-            cardStyle = "bg-slate-50 border-slate-100 opacity-60 grayscale-[0.5]";
-            buttonText = T.unavailable;
-        } else if (confirmedValuable && prize.isValuable) {
-            cardStyle = "bg-slate-50 border-slate-100 opacity-50";
-            buttonText = T.unavailable;
-            isDisabled = true;
-        } else {
-            buttonStyle = "bg-slate-800 text-white hover:bg-slate-900 shadow-md active:scale-95";
-        }
+    const baseClasses = "relative p-4 md:p-5 rounded-[24px] border transition-all duration-300 overflow-hidden cursor-pointer flex flex-col gap-3 min-h-[140px]";
+    let styleClasses = "";
+    
+    switch(state) {
+        case 'confirmed':
+            styleClasses = "bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-400 text-white shadow-lg shadow-emerald-200";
+            break;
+        case 'selected':
+            styleClasses = "bg-white border-2 border-blue-600 shadow-xl shadow-blue-100 ring-2 ring-blue-50 transform scale-[1.02]";
+            break;
+        case 'unlocked':
+            styleClasses = "bg-white border-slate-100 hover:border-blue-300 hover:shadow-md active:scale-[0.98]";
+            break;
+        case 'outOfStock':
+            styleClasses = "bg-slate-50 border-slate-100 opacity-60 grayscale";
+            break;
+        default: // locked
+            styleClasses = "bg-slate-50 border-slate-100 opacity-80";
     }
 
     return (
         <div 
-            onClick={() => !isDisabled && handleToggleSelection(prize)}
-            className={`relative p-4 rounded-[30px] border transition-all duration-300 overflow-hidden group cursor-pointer ${cardStyle}`}
+            onClick={() => (state === 'unlocked' || state === 'selected') && handleToggleSelection(prize)}
+            className={`${baseClasses} ${styleClasses}`}
         >
-            <div className="flex gap-4 items-center relative z-10">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 bg-white ${isConfirmed ? 'ring-2 ring-white/30 text-blue-500' : 'text-indigo-500'}`}>
-                    <PrizeIcon name={prize.icon} className="w-8 h-8" />
+            <div className="flex justify-between items-start">
+                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center 
+                    ${state === 'confirmed' ? 'bg-white/20 text-white' : (state === 'unlocked' || state === 'selected' ? 'bg-blue-50 text-blue-600' : 'bg-slate-200 text-slate-400')}`}>
+                    <PrizeIcon name={prize.icon} className="w-5 h-5" />
                 </div>
-                <div className="flex-1 min-w-0">
-                    <h4 className={`text-[10px] font-black uppercase tracking-wider mb-1 leading-tight ${isConfirmed ? 'text-white' : 'text-slate-800'}`}>
-                        {prize.title}
-                    </h4>
-                    {!isConfirmed && (
-                       <p className="text-[9px] font-medium text-slate-400 leading-tight line-clamp-2">{prize.description}</p>
-                    )}
-                    
-                    {prize.isValuable && !isConfirmed && (
-                        <div className="mt-2 w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                {state === 'confirmed' && <div className="bg-white/20 p-1 rounded-full"><CheckIcon /></div>}
+                {state === 'selected' && <div className="bg-blue-600 text-white p-1 rounded-full shadow-lg"><CheckIcon /></div>}
+                {(state === 'locked' || state === 'locked_alt_selected') && <LockIcon />}
+            </div>
+
+            <div className="flex-1">
+                <h4 className={`text-xs font-black uppercase tracking-wider leading-tight mb-1 ${state === 'confirmed' ? 'text-white' : 'text-slate-800'}`}>
+                    {prize.title}
+                </h4>
+                {!isConfirmed && (
+                    <p className={`text-[9px] font-medium leading-snug line-clamp-2 ${state === 'confirmed' ? 'text-white/80' : 'text-slate-400'}`}>
+                        {prize.description}
+                    </p>
+                )}
+            </div>
+
+            {/* Progress / Status Footer */}
+            {!isConfirmed && (
+                <div className="mt-auto pt-2 border-t border-black/5">
+                    {prize.isValuable && (
+                        <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mb-2">
                             <div 
-                                className={`h-full transition-all duration-1000 ${isUnlocked ? 'bg-blue-400' : 'bg-orange-400'}`} 
+                                className={`h-full transition-all duration-1000 ${isUnlocked ? 'bg-green-400' : 'bg-orange-400'}`} 
                                 style={{ width: `${progressPercent}%` }}
                             />
                         </div>
                     )}
+                    <div className="flex justify-between items-center">
+                         <span className={`text-[8px] font-bold uppercase tracking-widest ${state === 'confirmed' ? 'text-white/80' : 'text-slate-400'}`}>
+                            {isUnlocked ? (prize.isValuable ? T.valuablePrize : T.basePrize) : `${Math.floor(progressPercent)}%`}
+                         </span>
+                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${state === 'confirmed' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                            {state === 'outOfStock' ? T.outOfStock : `${prize.threshold}`}
+                         </span>
+                    </div>
                 </div>
-            </div>
-
-            <div className="mt-4 flex justify-between items-center">
-                 <div className={`text-[9px] font-black uppercase tracking-widest ${isConfirmed ? 'text-white/80' : 'text-slate-300'}`}>
-                    {isUnlocked ? `${prize.threshold} Pts` : `${Math.floor(progressPercent)}%`}
-                 </div>
-                 
-                 <div className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${buttonStyle}`}>
-                    {isConfirmed && <CheckIcon />}
-                    {!isUnlocked && !isConfirmed ? <LockIcon /> : null}
-                    <span>{buttonText}</span>
-                 </div>
-            </div>
+            )}
         </div>
     );
   };
 
+  // --- RENDER ---
   const containerClass = embedded 
     ? "relative w-full h-full" 
     : "fixed inset-0 w-full h-full bg-slate-50 z-50";
-    
-  // Sort prizes
-  const basePrizes = prizes.filter(p => !p.isValuable).sort((a,b) => a.threshold - b.threshold);
-  const valuablePrizes = prizes.filter(p => p.isValuable).sort((a,b) => a.threshold - b.threshold);
 
   return (
     <div className={containerClass}>
       
       {/* Scrollable Content */}
-      <div className={`absolute inset-0 overflow-y-auto custom-scrollbar ${embedded ? 'pb-[160px] pt-4' : 'pb-[140px]'}`}>
+      <div className={`absolute inset-0 overflow-y-auto custom-scrollbar ${embedded ? 'pb-[120px] pt-4' : 'pb-[100px]'}`}>
         <div className={`max-w-xl mx-auto flex flex-col p-6 min-h-full`}>
             
-             {/* Lang Switcher in Profile */}
+             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 {!embedded ? (
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">{T.profileTitle}</span>
                 ) : <div></div>}
                 
-                <div className="flex bg-white/50 backdrop-blur-md p-1 rounded-full border border-white">
-                    <button onClick={() => setLang('ru')} className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${lang === 'ru' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>RU</button>
-                    <button onClick={() => setLang('tg')} className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${lang === 'tg' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>TJ</button>
+                {/* Optimization: Removed backdrop-blur */}
+                <div className="flex bg-white/60 p-1 rounded-full border border-white shadow-sm">
+                    <button onClick={() => setLang('ru')} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase transition-all ${lang === 'ru' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>RU</button>
+                    <button onClick={() => setLang('tg')} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase transition-all ${lang === 'tg' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>TJ</button>
                 </div>
             </div>
 
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100 mb-8 relative overflow-hidden">
-                <div className="relative z-10">
-                    <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tight mb-1">{user.name}</h2>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">{user.city} • {user.phone}</p>
-                    
-                    <div className="flex gap-4">
-                        <div className="bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100">
-                            <div className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mb-1">{T.record}</div>
-                            <div className="text-2xl font-thin text-slate-800 leading-none">{bestScore}</div>
+            {/* User Card */}
+            <div className="relative mb-6">
+                <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 rounded-[30px] text-white shadow-xl shadow-slate-200 overflow-hidden relative">
+                    {/* Optimization: Removed blurred blobs */}
+                    <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-xl font-black uppercase italic tracking-wide">{user.name}</h2>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 opacity-80">{user.city} • {user.phone}</p>
+                            </div>
+                            <button onClick={onLogout} className="text-white/40 hover:text-white transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                            </button>
                         </div>
-                        <div className="bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100">
-                            <div className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mb-1">{T.prizesClaimed}</div>
-                            <div className="text-2xl font-thin text-blue-500 leading-none">{user.claimedPrizes?.length || 0}<span className="text-slate-200">/2</span></div>
+                        
+                        <div className="flex gap-3">
+                            <div className="bg-white/10 px-4 py-3 rounded-2xl border border-white/5 flex-1">
+                                <div className="flex items-center gap-2 mb-1 text-yellow-400">
+                                    <TrophyIcon />
+                                    <span className="text-[9px] font-bold uppercase tracking-widest">{T.record}</span>
+                                </div>
+                                <div className="text-2xl font-medium">{bestScore}</div>
+                            </div>
+                            <div className="bg-white/10 px-4 py-3 rounded-2xl border border-white/5 flex-1">
+                                <div className="flex items-center gap-2 mb-1 text-emerald-400">
+                                    <GiftIcon />
+                                    <span className="text-[9px] font-bold uppercase tracking-widest">{T.prizesClaimed}</span>
+                                </div>
+                                <div className="text-2xl font-medium">{user.claimedPrizes?.length || 0}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div className="absolute -right-6 -bottom-6 opacity-5 rotate-12">
-                     <div className="w-32 h-32 bg-slate-800 rounded-full"></div>
-                </div>
+            </div>
+            
+            {/* Countdown */}
+            <div className="flex justify-center mb-6">
+                <Countdown lang={lang} />
             </div>
 
-            {/* Profile Tabs */}
-            <div className="flex p-1 bg-slate-100 rounded-[20px] mb-8">
-                <button 
-                    onClick={() => setActiveTab('prizes')}
-                    className={`flex-1 py-3 rounded-[16px] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'prizes' ? 'bg-white shadow-md text-slate-800' : 'text-slate-400'}`}
-                >
-                    {T.tabPrizes}
-                </button>
-                <button 
-                    onClick={() => setActiveTab('history')}
-                    className={`flex-1 py-3 rounded-[16px] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white shadow-md text-slate-800' : 'text-slate-400'}`}
-                >
-                    {T.tabHistory}
-                </button>
+            {/* Tabs */}
+            <div className="flex bg-white p-1.5 rounded-[20px] mb-6 shadow-sm border border-slate-100">
+                {(['prizes', 'codes', 'history'] as const).map(tab => (
+                    <button 
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`flex-1 py-3 rounded-[16px] text-[9px] font-black uppercase tracking-widest transition-all ${
+                            activeTab === tab 
+                            ? 'bg-slate-800 text-white shadow-md' 
+                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        {tab === 'prizes' ? T.tabPrizes : (tab === 'codes' ? T.tabCodes : T.tabHistory)}
+                    </button>
+                ))}
             </div>
 
-            {/* TAB CONTENT: PRIZES */}
+            {/* PRIZES TAB */}
             {activeTab === 'prizes' && (
-                <div className="space-y-8 flex-1 animate-fade-in">
-                    
-                    {basePrizes.length > 0 && (
-                        <div>
-                            <div className="flex items-center justify-between mb-4 px-2">
-                                <h3 className="text-sm font-black text-slate-800 uppercase italic">{T.basePrize}</h3>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                {basePrizes.map(p => <PrizeCard key={p.id} prize={p} />)}
-                            </div>
-                        </div>
-                    )}
+                <div className="space-y-4 animate-fade-in pb-20">
+                    <div className="grid grid-cols-2 gap-3">
+                        {prizes.sort((a,b) => a.threshold - b.threshold).map(p => (
+                            <PrizeCard key={p.id} prize={p} />
+                        ))}
+                    </div>
 
-                    {valuablePrizes.length > 0 && (
-                        <div>
-                            <div className="flex items-center justify-between mb-4 px-2">
-                                <h3 className="text-sm font-black text-slate-800 uppercase italic">{T.valuablePrize}</h3>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{T.chooseOne}</span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {valuablePrizes.map(p => <PrizeCard key={p.id} prize={p} />)}
-                            </div>
+                    {/* Action Bar */}
+                    <div className="fixed bottom-24 left-0 right-0 px-6 pointer-events-none">
+                        <div className="max-w-xl mx-auto pointer-events-auto">
+                            {user.deliveryRequested ? (
+                                <div className="bg-green-500 text-white p-4 rounded-[20px] shadow-lg shadow-green-200 text-center font-bold uppercase text-xs animate-fade-in flex items-center justify-center gap-2">
+                                    <CheckIcon /> {T.reqAccepted}
+                                </div>
+                            ) : (
+                                <div className="flex gap-3">
+                                    {hasUnsavedChanges && (
+                                        <button 
+                                            onClick={handleConfirmSelection}
+                                            disabled={loading}
+                                            className="flex-1 bg-slate-800 text-white py-4 rounded-[20px] shadow-lg shadow-slate-300 font-bold uppercase text-[10px] tracking-widest hover:bg-slate-900 transition active:scale-95 disabled:opacity-70"
+                                        >
+                                            {loading ? '...' : T.saveChanges}
+                                        </button>
+                                    )}
+                                    {canRequestDelivery && !hasUnsavedChanges && (
+                                         <button 
+                                            onClick={handleDeliveryRequestClick}
+                                            disabled={loading}
+                                            className="flex-1 bg-blue-600 text-white py-4 rounded-[20px] shadow-lg shadow-blue-300 font-bold uppercase text-[10px] tracking-widest hover:bg-blue-700 transition active:scale-95 disabled:opacity-70"
+                                        >
+                                            {loading ? '...' : T.requestDelivery}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                    )}
-                    
-                    <div className="mt-12 text-center pb-4">
-                        <button onClick={onLogout} className="group flex items-center justify-center gap-2 mx-auto px-6 py-3 rounded-full hover:bg-red-50 transition-colors">
-                            <span className="text-[10px] font-bold uppercase text-slate-300 group-hover:text-red-400 transition-colors tracking-widest">{T.logout}</span>
-                        </button>
                     </div>
                 </div>
             )}
 
-            {/* TAB CONTENT: HISTORY */}
-            {activeTab === 'history' && (
-                <div className="space-y-4 animate-fade-in pb-20">
-                    {gameHistory.length > 0 ? gameHistory.map((res) => (
-                      <div key={res.id} className="p-6 bg-white rounded-[25px] flex justify-between items-center border border-slate-100 shadow-sm">
-                        <div>
-                          <div className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mb-1">{new Date(res.playedAt).toLocaleDateString()}</div>
-                          <div className={`font-bold text-xs ${res.prize ? 'text-blue-500' : 'text-slate-400'}`}>
-                            {res.prize || T.withoutPrize}
-                          </div>
-                          <div className="text-[8px] text-slate-200 font-mono mt-2">{res.codeUsed}</div>
+            {/* CODES TAB */}
+            {activeTab === 'codes' && (
+                <div className="space-y-3 animate-fade-in">
+                    {sortedCodes.length === 0 ? (
+                        <div className="text-center py-12 bg-white rounded-[30px] border border-dashed border-slate-200">
+                             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">{T.noCodes}</p>
                         </div>
-                        <div className="text-3xl font-thin text-slate-800">{res.score}</div>
-                      </div>
-                    )) : (
-                      <div className="text-center py-20 bg-white rounded-[30px] border border-dashed border-slate-200">
-                        <p className="text-slate-300 font-bold uppercase text-[10px] tracking-widest">{T.noGames}</p>
-                      </div>
+                    ) : (
+                        sortedCodes.map(c => (
+                            <div key={c.code} className={`p-4 rounded-[20px] flex justify-between items-center border ${c.isUsed ? 'bg-slate-50 border-slate-100' : 'bg-white border-blue-100 shadow-sm'}`}>
+                                <div>
+                                    <div className={`font-mono font-black text-lg ${c.isUsed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{c.code}</div>
+                                    <div className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                        {c.isUsed ? T.statusUsed : T.statusActive}
+                                    </div>
+                                </div>
+                                {!c.isUsed && !user.deliveryRequested && (
+                                    <button 
+                                        onClick={() => onPlayCode(c.code)}
+                                        className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold uppercase text-[9px] tracking-widest shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition"
+                                    >
+                                        {T.playCode}
+                                    </button>
+                                )}
+                            </div>
+                        ))
                     )}
                 </div>
             )}
+
+            {/* HISTORY TAB */}
+            {activeTab === 'history' && (
+                <div className="space-y-3 animate-fade-in">
+                    {gameHistory.length === 0 ? (
+                         <div className="text-center py-12 bg-white rounded-[30px] border border-dashed border-slate-200">
+                             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">{T.noGames}</p>
+                        </div>
+                    ) : (
+                        gameHistory.map(g => (
+                            <div key={g.id} className="bg-white p-4 rounded-[20px] border border-slate-100 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${g.codeUsed === 'TRIAL' ? 'bg-orange-50 text-orange-400' : 'bg-blue-50 text-blue-600'}`}>
+                                            {g.codeUsed === 'TRIAL' ? T.trialGame : g.codeUsed}
+                                        </span>
+                                        <span className="text-[9px] text-slate-300 font-bold">{new Date(g.playedAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="mt-1 text-xs text-slate-400 font-medium">
+                                        {g.prize ? `${T.prizesClaimed}: ${g.prize}` : (g.codeUsed === 'TRIAL' ? T.withoutPrize : T.promoCode)}
+                                    </div>
+                                </div>
+                                <div className="text-xl font-black text-slate-800">{g.score}</div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {tempError && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-full shadow-xl z-[100] text-[10px] font-bold uppercase tracking-widest animate-fade-in">
+                    {tempError}
+                </div>
+            )}
+
+            {/* DELIVERY CONFIRMATION MODAL */}
+            {showDeliveryConfirmation && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 p-6">
+                    <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl animate-fade-in relative text-center">
+                         <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <span className="text-3xl">⚠️</span>
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-800 uppercase italic mb-4 leading-none">{T.attention}</h3>
+                        
+                        <div className="space-y-4 mb-8 text-left bg-slate-50 p-5 rounded-[24px]">
+                            <p className="text-xs font-bold text-slate-700 leading-relaxed">
+                                {T.deliveryWarning}
+                            </p>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                {T.deliveryHint}
+                            </p>
+                            <p className="text-xs font-bold text-blue-600 leading-relaxed">
+                                {T.deliveryAdvice}
+                            </p>
+                            
+                            <Countdown lang={lang} />
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <button 
+                                onClick={confirmDelivery}
+                                disabled={loading}
+                                className="w-full py-4 bg-slate-200 text-slate-500 font-bold rounded-[20px] uppercase text-[10px] tracking-widest hover:bg-slate-300 transition"
+                            >
+                                {loading ? '...' : T.confirmFinal}
+                            </button>
+                            <button 
+                                onClick={() => setShowDeliveryConfirmation(false)}
+                                className="w-full py-4 bg-blue-600 text-white font-bold rounded-[20px] shadow-lg shadow-blue-200 uppercase text-[10px] tracking-widest hover:bg-blue-700 transition active:scale-95"
+                            >
+                                {T.keepPlaying}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
       </div>
-
-      {/* Floating Error Message */}
-      {tempError && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] animate-bounce w-max max-w-[90%]">
-            <div className="bg-red-500 text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 justify-center">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 shrink-0"><circle cx="12" cy="12" r="10" strokeWidth="2"/><line x1="12" y1="8" x2="12" y2="12" strokeWidth="2"/><line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2"/></svg>
-                <span className="truncate">{tempError}</span>
-            </div>
-        </div>
-      )}
-
-      {/* 2. Action Footer Bar (Save / Request) - Only shown on Prizes tab */}
-      {activeTab === 'prizes' && (canConfirm || !user.deliveryRequested) && (
-          <div className={`absolute bottom-0 left-0 right-0 p-4 z-50 pointer-events-none ${embedded ? 'pb-[100px]' : 'bg-white border-t border-slate-100 pb-8'}`}>
-             <div className="max-w-xl mx-auto w-full pointer-events-auto">
-                 
-                 {!embedded && (
-                     <div className="h-6 mb-2 flex items-center justify-center">
-                        {canConfirm ? (
-                            <p className="text-[9px] text-indigo-500 font-bold uppercase tracking-widest animate-pulse">
-                                {T.saveChanges}
-                            </p>
-                        ) : (
-                            !confirmedBasic && !user.deliveryRequested ? (
-                                <p className="text-[9px] text-red-400 font-bold uppercase tracking-widest flex items-center gap-2">
-                                     <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping"/>
-                                     {T.selectCard}
-                                </p>
-                            ) : null
-                        )}
-                     </div>
-                 )}
-
-                 <div className="flex gap-3 h-14">
-                    {!embedded && (
-                         <button 
-                            onClick={onBack}
-                            className="aspect-square h-full bg-slate-50 text-slate-400 rounded-2xl border border-slate-200 flex items-center justify-center transition active:scale-95 hover:bg-slate-100 hover:text-slate-600"
-                         >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-6 h-6" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                            </svg>
-                         </button>
-                    )}
-
-                    <div className="flex-1 h-full shadow-2xl">
-                        {canConfirm ? (
-                            <button 
-                                onClick={handleConfirmSelection}
-                                disabled={loading}
-                                className="w-full h-full bg-indigo-600 text-white font-black rounded-2xl shadow-lg shadow-indigo-200 uppercase tracking-widest text-xs transition active:scale-95 hover:bg-indigo-700 flex items-center justify-center gap-2"
-                            >
-                                {loading ? '...' : T.confirmChoice}
-                            </button>
-                        ) : (
-                            user.deliveryRequested ? (
-                                !embedded && (
-                                    <div className="w-full h-full bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center gap-2 px-4 shadow-sm">
-                                        <div className="w-6 h-6 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center shrink-0">
-                                            <CheckIcon />
-                                        </div>
-                                        <span className="text-blue-700 font-black uppercase text-[10px] tracking-widest truncate">{T.reqAccepted}</span>
-                                    </div>
-                                )
-                            ) : (
-                                <button 
-                                    onClick={handleDeliveryRequest}
-                                    disabled={!canRequestDelivery || loading}
-                                    className={`w-full h-full font-black rounded-2xl shadow-lg uppercase tracking-widest text-xs transition active:scale-95 flex items-center justify-center gap-2 ${
-                                        canRequestDelivery
-                                        ? 'bg-slate-800 text-white hover:bg-slate-900 shadow-slate-200' 
-                                        : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed shadow-none'
-                                    }`}
-                                >
-                                    {loading ? '...' : T.requestDelivery}
-                                </button>
-                            )
-                        )}
-                    </div>
-                 </div>
-             </div>
-          </div>
-      )}
     </div>
   );
 };

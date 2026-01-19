@@ -27,6 +27,8 @@ export interface PromoCode {
   isIssued?: boolean; // Track if code has been given to a player
   assignedTo?: string; // userId
   generatedAt: string;
+  invoiceNumber?: string;
+  purchaseAmount?: number;
 }
 
 export interface PrizeConfig {
@@ -179,43 +181,34 @@ export const INITIAL_PRIZES: PrizeConfig[] = [
 export const PRIZES = {
   TIER_1: 'Карта «Ёвар»',
   TIER_2: 'Беспроводные наушники',
-  
-  // Tier 3 (30 Points)
   TIER_3_TV: 'Телевизор',
   TIER_3_WATCH: 'Смарт часы',
   TIER_3_COFFEE: 'Кофемашина',
   TIER_3_SPEAKER: 'Беспроводные колонки',
   TIER_3_HUMIDIFIER: 'Увлажнитель воздуха',
-
-  // Tier 4 (50 Points)
   TIER_4_PHONE: 'Смартфон',
   TIER_4_TABLET: 'Планшет',
   TIER_4_BIKE: 'Велосипед',
   TIER_4_AC: 'Кондиционер',
   TIER_4_VACUUM: 'Пылесос',
   TIER_4_OVEN: 'Духовая печь',
-
-  // Tier 5 (100 Points)
   TIER_5: 'Поездка в Грузию'
 };
 
 export const THRESHOLDS = {
   TIER_1: 10,
   TIER_2: 20,
-  // Tier 3
   TIER_3_TV: 30,
   TIER_3_WATCH: 30,
   TIER_3_COFFEE: 30,
   TIER_3_SPEAKER: 30,
   TIER_3_HUMIDIFIER: 30,
-  // Tier 4
   TIER_4_PHONE: 50,
   TIER_4_TABLET: 50,
   TIER_4_BIKE: 50,
   TIER_4_AC: 50,
   TIER_4_VACUUM: 50,
   TIER_4_OVEN: 50,
-  // Tier 5
   TIER_5: 100
 };
 

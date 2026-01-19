@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { RegisterScreen, CodeScreen } from './components/UI/AuthScreens';
+import { RegisterScreen, PurchaseRulesScreen } from './components/UI/AuthScreens';
 import { BelindaStackGame } from './components/Game/BelindaStackGame';
 import { AdminPanel } from './components/UI/AdminPanel';
 import { ProfileScreen } from './components/UI/ProfileScreen';
@@ -73,45 +73,45 @@ const ArrowRightIcon = () => (
 function App() {
   const [screen, setScreen] = useState<ScreenType>('register');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [lang, setLang] = useState<Language>('ru'); // GLOBAL LANGUAGE STATE
+  const [lang, setLang] = useState<Language>('ru');
   const [isLoading, setIsLoading] = useState(true);
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<'home' | 'profile' | 'rules'>('home');
+  // State to control which tab opens in profile
+  const [profileInitialTab, setProfileInitialTab] = useState<'prizes' | 'history' | 'codes'>('prizes');
   
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [gameState, setGameState] = useState<'idle' | 'playing' | 'ended'>('idle');
   const [score, setScore] = useState(0);
   
-  const [showCodeEntry, setShowCodeEntry] = useState(false);
+  const [showPurchaseRules, setShowPurchaseRules] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [userHistory, setUserHistory] = useState<GameResult[]>([]);
   const [isAdminTester, setIsAdminTester] = useState(false);
   const [muted, setMuted] = useState(false);
   const [trialsLeft, setTrialsLeft] = useState(0);
   const [viewingPrizeId, setViewingPrizeId] = useState<string | null>(null);
-  
-  // Dynamic Prizes
+  const [unusedCodesCount, setUnusedCodesCount] = useState(0);
+  const [showTrialsOverAlert, setShowTrialsOverAlert] = useState(false);
   const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
 
-  const T = t[lang]; // Shortcut for translations
+  const T = t[lang];
 
-  // Initial Load
   useEffect(() => {
     const initApp = async () => {
         try {
-            // 1. Load Prizes
             const prizesData = await backend.getPrizes();
             setPrizes(prizesData);
             
-            // 2. Load User
             const user = await backend.refreshUser();
             if (user) {
                 setCurrentUser(user);
                 setScreen('game');
-                // Sync trials
                 await backend.syncTrialCount(user.id);
                 setTrialsLeft(MAX_TRIALS - backend.getTrialCount(user.id));
+                const codes = await backend.getUserUnusedCodes(user.id);
+                setUnusedCodesCount(codes.length);
             }
         } catch (error) {
             console.error("Initialization error:", error);
@@ -131,9 +131,11 @@ function App() {
   useEffect(() => {
     if (currentUser) {
       backend.getUserResults(currentUser.id).then(history => setUserHistory(history));
-      // Ensure trial count is fresh
       backend.syncTrialCount(currentUser.id).then(() => {
           setTrialsLeft(MAX_TRIALS - backend.getTrialCount(currentUser.id));
+      });
+      backend.getUserUnusedCodes(currentUser.id).then(codes => {
+          setUnusedCodesCount(codes.length);
       });
     }
   }, [currentUser, gameState]);
@@ -149,28 +151,36 @@ function App() {
   };
 
   const handleGameOver = async (finalScore: number) => {
-    if (currentUser) {
-      await backend.saveGameResult(currentUser.id, finalScore, isAdminTester ? 'ADMIN_TEST' : (activeCode || 'TRIAL'), !activeCode && !isAdminTester);
-      // Sync trial count after game saves
-      await backend.syncTrialCount(currentUser.id);
-      setTrialsLeft(MAX_TRIALS - backend.getTrialCount(currentUser.id));
-      
-      const updated = await backend.refreshUser();
-      if (updated) setCurrentUser(updated);
-    }
     setGameState('ended');
+    setActiveCode(null);
+
+    if (currentUser) {
+      try {
+        await backend.saveGameResult(currentUser.id, finalScore, isAdminTester ? 'ADMIN_TEST' : (activeCode || 'TRIAL'), !activeCode && !isAdminTester);
+        await backend.syncTrialCount(currentUser.id);
+        const freshTrialsLeft = MAX_TRIALS - backend.getTrialCount(currentUser.id);
+        setTrialsLeft(freshTrialsLeft);
+        
+        const codes = await backend.getUserUnusedCodes(currentUser.id);
+        setUnusedCodesCount(codes.length);
+        
+        const updated = await backend.refreshUser();
+        if (updated) setCurrentUser(updated);
+      } catch (e) {
+        console.error("Error saving score:", e);
+      }
+    }
   };
 
   const handleAdminTest = () => {
     setIsAdminTester(true);
     setScreen('game');
-    setShowCodeEntry(false);
+    setShowPurchaseRules(false);
     setShowTutorial(false);
     setGameState('idle');
     setScore(0);
   };
 
-  // Triggered by "Play" button in Dashboard
   const handlePlayRequest = () => {
      if (isAdminTester) {
          startTutorial(null);
@@ -182,24 +192,49 @@ function App() {
      } else if (trialsLeft > 0) {
          startTutorial(null);
      } else {
-         // No trials, no code
-         setShowCodeEntry(true);
+         // --- LOGIC UPDATE ---
+         // If no trials left:
+         if (unusedCodesCount > 0) {
+             // User has codes -> Redirect to Profile "My Codes"
+             setProfileInitialTab('codes');
+             setActiveTab('profile');
+         } else {
+             // User has NO codes -> Redirect to "How to get codes"
+             setShowPurchaseRules(true);
+         }
      }
   };
 
   const startTutorial = (c: string | null) => {
     setActiveCode(c);
-    setShowCodeEntry(false);
+    setShowPurchaseRules(false);
     setShowTutorial(true);
     setViewingPrizeId(null);
   };
 
   const startGameAfterTutorial = () => {
+    if (!activeCode && !isAdminTester && trialsLeft <= 0) {
+        setShowTutorial(false);
+        setShowTrialsOverAlert(true);
+        return;
+    }
+
     if (!activeCode && !isAdminTester && currentUser) {
       backend.useTrial(currentUser.id);
     }
     setShowTutorial(false);
     setGameState('playing');
+  };
+
+  const handlePlayWithCode = async (code: string) => {
+      if(!currentUser) return;
+      try {
+          await backend.validateAndUseCode(code, currentUser.id);
+          setActiveTab('home'); 
+          startTutorial(code);
+      } catch (e: any) {
+          alert(e.message);
+      }
   };
 
   const bestScore = Math.max(score, ...userHistory.map(r => r.score), 0);
@@ -210,17 +245,16 @@ function App() {
       setScreen('register');
       setGameState('idle');
       setScore(0);
-      setShowCodeEntry(false);
+      setShowPurchaseRules(false);
       setActiveTab('home');
+      setShowTrialsOverAlert(false);
   };
-
-  // --- RENDERING ---
 
   if (isLoading) {
       return (
           <div className="w-full h-full flex items-center justify-center bg-slate-100">
-             <div className="flex flex-col items-center gap-6 animate-fade-in">
-                 <BoltIcon className="w-12 h-12 text-blue-500 animate-pulse" />
+             <div className="flex flex-col items-center gap-6">
+                 <BoltIcon className="w-12 h-12 text-blue-500" />
                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Загрузка...</p>
              </div>
           </div>
@@ -237,6 +271,8 @@ function App() {
                 setScreen('game');
                 await backend.syncTrialCount(u.id);
                 setTrialsLeft(MAX_TRIALS - backend.getTrialCount(u.id));
+                const codes = await backend.getUserUnusedCodes(u.id);
+                setUnusedCodesCount(codes.length);
             }
             setIsLoading(false);
         }} 
@@ -253,8 +289,8 @@ function App() {
   return (
     <div className="w-full h-full relative bg-slate-100 overflow-hidden font-sans">
       
-      {/* 1. LAYER: 3D GAME (Always rendered, acts as background in idle) */}
-      <div id="game-background" className="absolute inset-0 bg-gradient-to-b from-[#d6e8f5] to-[#aed9e0] transition-colors duration-1000"></div>
+      {/* 1. LAYER: 3D GAME - Optimization: Removed heavy transition duration */}
+      <div id="game-background" className="absolute inset-0 bg-gradient-to-b from-[#d6e8f5] to-[#aed9e0]"></div>
       <BelindaStackGame 
         onGameOver={handleGameOver} 
         onScoreUpdate={handleGameScoreUpdate}
@@ -262,7 +298,7 @@ function App() {
         onGameStart={() => {}}
       />
 
-      {/* 2. LAYER: IN-GAME HUD (Only visible when playing) */}
+      {/* 2. LAYER: IN-GAME HUD */}
       {gameState === 'playing' && (
          <div className="absolute inset-0 pointer-events-none z-20">
              <div className="absolute top-12 left-0 right-0 flex justify-center">
@@ -272,20 +308,22 @@ function App() {
              </div>
              <button 
                 onClick={toggleMute}
-                className="absolute top-8 right-8 pointer-events-auto bg-white/20 backdrop-blur-md p-3 rounded-full text-white hover:bg-white/40 transition active:scale-95"
+                // Optimization: Removed backdrop-blur, used solid semi-transparent
+                className="absolute top-8 right-8 pointer-events-auto bg-white/40 p-3 rounded-full text-white hover:bg-white/60 transition active:scale-95"
              >
                 <SoundIcon muted={muted} />
              </button>
          </div>
       )}
 
-      {/* 3. LAYER: UI OVERLAY (Dashboard/Menu) - Only when idle/ended */}
+      {/* 3. LAYER: UI OVERLAY */}
       {gameState !== 'playing' && (
           <div className="absolute inset-0 z-30 flex flex-col pointer-events-none">
               
               {/* --- HEADER --- */}
               <div className="pt-8 px-6 flex justify-between items-start pointer-events-auto">
-                  <div className="flex items-center gap-3 bg-white/80 backdrop-blur-md p-2 pr-4 rounded-full shadow-sm border border-white/50">
+                  {/* Optimization: Removed backdrop-blur */}
+                  <div className="flex items-center gap-3 bg-white/95 p-2 pr-4 rounded-full shadow-sm border border-white/50">
                       <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
                           <UserIcon />
                       </div>
@@ -296,13 +334,13 @@ function App() {
                   </div>
                   
                   <div className="flex gap-2">
-                     <button onClick={toggleMute} className="w-10 h-10 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center text-slate-500 shadow-sm border border-white/50 active:scale-95 transition">
+                     <button onClick={toggleMute} className="w-10 h-10 bg-white/95 rounded-full flex items-center justify-center text-slate-500 shadow-sm border border-white/50 active:scale-95 transition">
                          <SoundIcon muted={muted} />
                      </button>
                   </div>
               </div>
 
-              {/* --- CONTENT AREA (Switchable) --- */}
+              {/* --- CONTENT AREA --- */}
               <div className="flex-1 relative">
                   
                   {/* HOME DASHBOARD */}
@@ -310,7 +348,8 @@ function App() {
                       <div className="absolute inset-0 flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
                           
                           <div className="mb-10 text-center">
-                                <div className="inline-flex items-center justify-center gap-2 bg-blue-500/10 text-blue-600 px-4 py-1.5 rounded-full mb-4 border border-blue-500/20 backdrop-blur-sm">
+                                {/* Optimization: Removed backdrop-blur */}
+                                <div className="inline-flex items-center justify-center gap-2 bg-blue-500/10 text-blue-600 px-4 py-1.5 rounded-full mb-4 border border-blue-500/20">
                                     <BoltIcon />
                                     <span className="text-[10px] font-black uppercase tracking-widest">{T.appSubtitle}</span>
                                 </div>
@@ -321,7 +360,8 @@ function App() {
                           </div>
 
                           <div className="relative group">
-                              <div className="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity animate-pulse"></div>
+                              {/* Optimization: Removed animate-pulse from blur blob */}
+                              <div className="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity"></div>
                               <button 
                                 onClick={handlePlayRequest}
                                 className="relative w-24 h-24 bg-gradient-to-tr from-slate-800 to-slate-700 rounded-full flex items-center justify-center shadow-2xl shadow-slate-900/30 border-4 border-white/20 hover:scale-110 transition-transform duration-300 group-active:scale-95"
@@ -333,11 +373,12 @@ function App() {
                           </div>
 
                           <div className="mt-8 flex gap-4">
-                              <div className="bg-white/60 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/50 text-center shadow-sm">
+                              {/* Optimization: Removed backdrop-blur */}
+                              <div className="bg-white/90 px-6 py-3 rounded-2xl border border-white/50 text-center shadow-sm">
                                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{T.record}</div>
                                   <div className="text-2xl font-black text-slate-800 leading-none">{bestScore}</div>
                               </div>
-                              <div className="bg-white/60 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/50 text-center shadow-sm">
+                              <div className="bg-white/90 px-6 py-3 rounded-2xl border border-white/50 text-center shadow-sm">
                                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{T.attempts}</div>
                                   <div className={`text-2xl font-black leading-none ${trialsLeft > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
                                       {activeCode ? '∞' : trialsLeft}
@@ -355,7 +396,7 @@ function App() {
 
                   {/* PROFILE VIEW */}
                   {activeTab === 'profile' && (
-                      <div className="absolute inset-0 pointer-events-auto animate-fade-in bg-slate-50/50 backdrop-blur-sm">
+                      <div className="absolute inset-0 pointer-events-auto animate-fade-in bg-slate-50">
                           {currentUser && (
                               <ProfileScreen 
                                 user={currentUser} 
@@ -365,6 +406,8 @@ function App() {
                                 lang={lang}
                                 setLang={setLang}
                                 prizes={prizes}
+                                onPlayCode={handlePlayWithCode}
+                                initialTab={profileInitialTab}
                               />
                           )}
                       </div>
@@ -372,7 +415,7 @@ function App() {
 
                   {/* RULES VIEW */}
                   {activeTab === 'rules' && (
-                      <div className="absolute inset-0 pointer-events-auto animate-fade-in flex flex-col items-center justify-center p-6 bg-slate-900/10 backdrop-blur-sm">
+                      <div className="absolute inset-0 pointer-events-auto animate-fade-in flex flex-col items-center justify-center p-6 bg-slate-900/10">
                           <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[70vh]">
                               <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
                                   <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tight">{T.rulesTitle}</h2>
@@ -413,7 +456,7 @@ function App() {
 
                   {/* GAME OVER (Replaces Home when ended) */}
                   {gameState === 'ended' && (
-                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-auto bg-slate-900/10 backdrop-blur-sm p-6">
+                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-auto bg-slate-900/10 p-6">
                             <div className="bg-white p-10 rounded-[50px] shadow-2xl text-center max-w-sm w-full animate-fade-in relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
                                 <div className="inline-block p-3 rounded-full bg-slate-50 mb-4 shadow-inner text-slate-400">
@@ -423,17 +466,37 @@ function App() {
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">{T.yourScore}</p>
                                 
                                 {score > bestScore && (
-                                    <div className="mb-6 bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest inline-block border border-amber-100 animate-pulse">
+                                    <div className="mb-6 bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest inline-block border border-amber-100">
                                         {T.newRecord}
                                     </div>
                                 )}
+
+                                <div className="mb-8 flex justify-center gap-4">
+                                    {!activeCode && (
+                                        <div className={`px-4 py-2 rounded-xl border ${trialsLeft > 0 ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-red-50 border-red-100 text-red-500'}`}>
+                                            <div className="text-[8px] font-bold uppercase tracking-widest opacity-60">{T.attemptsLeft}</div>
+                                            <div className="text-xl font-black leading-none">{Math.max(0, trialsLeft)}</div>
+                                        </div>
+                                    )}
+                                    <div className="px-4 py-2 rounded-xl border bg-indigo-50 border-indigo-100 text-indigo-600">
+                                        <div className="text-[8px] font-bold uppercase tracking-widest opacity-60">{T.codesAvailable}</div>
+                                        <div className="text-xl font-black leading-none">{unusedCodesCount}</div>
+                                    </div>
+                                </div>
 
                                 <div className="flex gap-3">
                                     <button onClick={() => { setGameState('idle'); setActiveTab('home'); }} className="flex-1 py-4 bg-slate-100 text-slate-500 font-bold rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-200 transition">
                                         {T.menu}
                                     </button>
-                                    <button onClick={() => { setGameState('idle'); handlePlayRequest(); }} className="flex-[2] py-4 bg-slate-800 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-900 transition shadow-lg shadow-slate-300">
-                                        {T.playAgain}
+                                    <button 
+                                        onClick={() => { setGameState('idle'); handlePlayRequest(); }} 
+                                        className={`flex-[2] py-4 font-black rounded-2xl uppercase text-[10px] tracking-widest transition shadow-lg ${
+                                            (trialsLeft <= 0 && !activeCode)
+                                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' 
+                                            : 'bg-slate-800 text-white hover:bg-slate-900 shadow-slate-300'
+                                        }`}
+                                    >
+                                        {(trialsLeft <= 0 && !activeCode) ? T.getCodes : T.playAgain}
                                     </button>
                                 </div>
                             </div>
@@ -444,28 +507,29 @@ function App() {
               {/* --- BOTTOM DOCK (NAVIGATION) --- */}
               {gameState !== 'ended' && (
                   <div className="pb-8 px-6 pt-4 pointer-events-auto">
-                      <div className="bg-white/90 backdrop-blur-xl rounded-[30px] shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white p-2 flex justify-between items-center max-w-sm mx-auto">
+                      {/* Optimization: Removed backdrop-blur */}
+                      <div className="bg-white/95 rounded-[30px] shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white p-2 flex justify-between items-center max-w-sm mx-auto">
                           <button 
-                              onClick={() => setActiveTab('home')}
+                              onClick={() => { setActiveTab('home'); setProfileInitialTab('prizes'); }}
                               className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-[24px] transition-all duration-300 ${activeTab === 'home' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
                           >
                               <HomeIcon />
-                              {activeTab === 'home' && <span className="text-[9px] font-black uppercase tracking-widest animate-fade-in">{T.menuMain}</span>}
+                              {activeTab === 'home' && <span className="text-[9px] font-black uppercase tracking-widest">{T.menuMain}</span>}
                           </button>
 
                           <button 
-                              onClick={() => setShowCodeEntry(true)}
+                              onClick={() => setShowPurchaseRules(true)}
                               className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-[24px] transition-all duration-300 text-slate-400 hover:bg-slate-50`}
                           >
                               <QrCodeIcon />
                           </button>
                           
                           <button 
-                              onClick={() => setActiveTab('profile')}
+                              onClick={() => { setActiveTab('profile'); setProfileInitialTab('prizes'); }}
                               className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-[24px] transition-all duration-300 ${activeTab === 'profile' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}
                           >
                               <UserIcon />
-                              {activeTab === 'profile' && <span className="text-[9px] font-black uppercase tracking-widest animate-fade-in">{T.menuProfile}</span>}
+                              {activeTab === 'profile' && <span className="text-[9px] font-black uppercase tracking-widest">{T.menuProfile}</span>}
                           </button>
                           
                           <button 
@@ -473,7 +537,7 @@ function App() {
                               className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-[24px] transition-all duration-300 ${activeTab === 'rules' ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}
                           >
                               <BookOpenIcon />
-                              {activeTab === 'rules' && <span className="text-[9px] font-black uppercase tracking-widest animate-fade-in">{T.menuInfo}</span>}
+                              {activeTab === 'rules' && <span className="text-[9px] font-black uppercase tracking-widest">{T.menuInfo}</span>}
                           </button>
                       </div>
                   </div>
@@ -481,18 +545,18 @@ function App() {
           </div>
       )}
 
-      {/* MODALS */}
-      {showCodeEntry && (
-        <CodeScreen 
-            onCodeSuccess={(code) => startTutorial(code)} 
-            onClose={() => setShowCodeEntry(false)} 
-            onLogout={handleLogout}
-            lang={lang}
-        />
+      {/* MODALS - Optimization: Removed backdrop-blur */}
+      {showPurchaseRules && currentUser && (
+          <PurchaseRulesScreen 
+              onClose={() => setShowPurchaseRules(false)} 
+              lang={lang} 
+              userId={currentUser.id}
+              onPlayCode={handlePlayWithCode}
+          />
       )}
 
       {showTutorial && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-6">
               <div className="bg-white w-full max-w-sm p-8 rounded-[50px] shadow-2xl animate-fade-in relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-2 bg-blue-400"></div>
                   <h3 className="text-2xl font-black text-slate-800 uppercase italic mb-6 text-center">{T.howToPlay}</h3>
@@ -521,10 +585,34 @@ function App() {
               </div>
           </div>
       )}
+
+      {showTrialsOverAlert && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 p-6">
+          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl animate-fade-in text-center relative">
+            <button onClick={() => setShowTrialsOverAlert(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-500 text-2xl leading-none">&times;</button>
+            
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <BoltIcon className="w-8 h-8" />
+            </div>
+            
+            <h3 className="text-xl font-black text-slate-800 uppercase italic mb-2 leading-tight">{T.trialsOverTitle}</h3>
+            <p className="text-xs font-medium text-slate-400 mb-8 leading-relaxed">{T.trialsOverDesc}</p>
+            
+            <button 
+                onClick={() => {
+                    setShowTrialsOverAlert(false);
+                    setShowPurchaseRules(true);
+                }}
+                className="w-full py-4 bg-blue-600 text-white font-black rounded-[20px] shadow-lg shadow-blue-200 uppercase tracking-widest text-xs transition active:scale-95 hover:bg-blue-700"
+            >
+                {T.getCodes}
+            </button>
+          </div>
+        </div>
+      )}
       
       {viewingPrizeId && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6 animate-fade-in" onClick={() => setViewingPrizeId(null)}>
-              {/* Dynamic Prize Modal logic can go here using prizes state */}
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-6 animate-fade-in" onClick={() => setViewingPrizeId(null)}>
           </div>
       )}
 

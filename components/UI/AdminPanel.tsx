@@ -21,13 +21,19 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
   const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
   
   // States for Code Management
-  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [genCount, setGenCount] = useState(10);
   const [loading, setLoading] = useState(false);
   
-  // State for User Detail Modal
+  // State for User Search
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // State for User Detail Modal & Code Issue
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userResults, setUserResults] = useState<GameResult[]>([]);
+  const [userCodes, setUserCodes] = useState<PromoCode[]>([]); // Codes assigned to specific user
+  
+  // Code Issue Form
+  const [issueForm, setIssueForm] = useState({ invoice: '', amount: '', qty: '1' });
 
   // State for Prize Editing
   const [editingPrize, setEditingPrize] = useState<PrizeConfig | null>(null);
@@ -62,42 +68,40 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
     setLoading(false);
   };
 
-  const handleCopySelectedCodes = async () => {
-    if (selectedCodes.length === 0) return;
-    
-    const textToCopy = selectedCodes.join('\n');
-    try {
-        await navigator.clipboard.writeText(textToCopy);
-        // Update backend to mark as issued
-        await backend.markCodesAsIssued(selectedCodes);
-        setSelectedCodes([]);
-        await fetchData(); // Refresh UI to show "Issued" status
-        alert(`Скопировано ${selectedCodes.length} кодов. Статус обновлен на "Выдан".`);
-    } catch (err) {
-        console.error('Failed to copy', err);
-        alert('Ошибка при копировании');
-    }
-  };
-
-  const handleToggleCodeSelection = (code: string) => {
-     setSelectedCodes(prev => 
-         prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
-     );
-  };
-
-  const handleSelectAllActive = () => {
-      const activeCodes = codes.filter(c => !c.isUsed && !c.isIssued).map(c => c.code);
-      if (selectedCodes.length === activeCodes.length) {
-          setSelectedCodes([]); // Deselect all
-      } else {
-          setSelectedCodes(activeCodes);
-      }
-  };
-
   const handleUserClick = async (user: User) => {
     setSelectedUser(user);
     const results = await backend.getUserResults(user.id);
     setUserResults(results);
+    const uCodes = await backend.getUserUnusedCodes(user.id);
+    setUserCodes(uCodes);
+    setIssueForm({ invoice: '', amount: '', qty: '1' }); // Reset form
+  };
+
+  const handleIssueCodes = async () => {
+    if (!selectedUser) return;
+    if (!issueForm.invoice || !issueForm.amount || !issueForm.qty) {
+        alert("Заполните все поля");
+        return;
+    }
+    setLoading(true);
+    try {
+        await backend.issueCodesToUser(
+            selectedUser.id, 
+            parseInt(issueForm.qty), 
+            issueForm.invoice, 
+            parseFloat(issueForm.amount)
+        );
+        alert(T.codeGenerated);
+        // Refresh user data
+        const uCodes = await backend.getUserUnusedCodes(selectedUser.id);
+        setUserCodes(uCodes);
+        setIssueForm({ invoice: '', amount: '', qty: '1' });
+        await fetchData(); // Refresh global stats
+    } catch (e: any) {
+        alert(e.message);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleSavePrize = async () => {
@@ -117,6 +121,12 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
           await fetchData();
       }
   };
+
+  // Search filtering
+  const filteredUsers = users.filter(u => {
+      const term = searchTerm.toLowerCase();
+      return u.name.toLowerCase().includes(term) || u.phone.includes(term);
+  });
 
   // --- Components ---
 
@@ -179,8 +189,15 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                     </div>
 
                     <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
-                        <div className="p-8 border-b border-slate-50">
+                        <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
                             <h2 className="text-lg font-thin text-slate-800 uppercase italic">Все Пользователи</h2>
+                            <input 
+                                type="text" 
+                                placeholder={T.searchUser}
+                                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs w-full md:w-64 outline-none focus:border-blue-300"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
@@ -192,7 +209,7 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {users.map((user) => (
+                                    {filteredUsers.map((user) => (
                                         <tr key={user.id} className="hover:bg-slate-50/50 transition cursor-pointer" onClick={() => handleUserClick(user)}>
                                             <td className="px-8 py-4 font-bold text-slate-700 text-xs">{user.name}</td>
                                             <td className="px-8 py-4 font-light text-slate-400 text-xs">{user.phone}</td>
@@ -202,6 +219,9 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                                     ))}
                                 </tbody>
                             </table>
+                            {filteredUsers.length === 0 && (
+                                <div className="p-8 text-center text-slate-300 text-xs font-bold uppercase">Пользователи не найдены</div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -345,28 +365,6 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                                 {loading ? '...' : 'Генерировать'}
                             </button>
                         </div>
-
-                        <div className="h-px md:h-12 w-full md:w-px bg-slate-100"></div>
-
-                        <div className="flex-1 flex justify-end gap-4 items-center">
-                             <div className="text-right mr-4 hidden md:block">
-                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Выбрано</div>
-                                <div className="text-xl font-thin text-indigo-600 leading-none">{selectedCodes.length}</div>
-                             </div>
-                             <button 
-                                onClick={handleSelectAllActive}
-                                className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-4"
-                             >
-                                {selectedCodes.length > 0 ? 'Снять выделение' : 'Выбрать все активные'}
-                             </button>
-                             <button 
-                                onClick={handleCopySelectedCodes}
-                                disabled={selectedCodes.length === 0}
-                                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
-                             >
-                                Копировать и выдать
-                             </button>
-                        </div>
                     </div>
 
                     {/* Codes List */}
@@ -375,33 +373,20 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                                     <tr>
-                                        <th className="px-6 py-4 w-12 text-center">
-                                            <div className="w-4 h-4 rounded border border-slate-300 mx-auto"></div>
-                                        </th>
                                         <th className="px-6 py-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">Код</th>
                                         <th className="px-6 py-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">Статус</th>
                                         <th className="px-6 py-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">Создан</th>
                                         <th className="px-6 py-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">Кем использован</th>
+                                        <th className="px-6 py-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">Инфо</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {codes.map((c) => {
-                                        const isSelected = selectedCodes.includes(c.code);
                                         const statusColor = c.isUsed ? 'bg-slate-100 text-slate-400' : (c.isIssued ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600');
                                         const statusLabel = c.isUsed ? 'Использован' : (c.isIssued ? 'Выдан' : 'Активен');
                                         
                                         return (
-                                            <tr key={c.code} className={`hover:bg-slate-50/50 transition ${isSelected ? 'bg-indigo-50/30' : ''}`}>
-                                                <td className="px-6 py-3 text-center">
-                                                    {!c.isUsed && (
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={isSelected}
-                                                            onChange={() => handleToggleCodeSelection(c.code)}
-                                                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                                        />
-                                                    )}
-                                                </td>
+                                            <tr key={c.code} className="hover:bg-slate-50/50 transition">
                                                 <td className="px-6 py-3 font-mono font-bold text-slate-700">{c.code}</td>
                                                 <td className="px-6 py-3">
                                                     <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider ${statusColor}`}>
@@ -413,6 +398,9 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                                                 </td>
                                                 <td className="px-6 py-3 text-xs text-slate-500">
                                                      {c.assignedTo ? users.find(u => u.id === c.assignedTo)?.name || 'Unknown' : '-'}
+                                                </td>
+                                                <td className="px-6 py-3 text-[10px] text-slate-400">
+                                                    {c.invoiceNumber ? `Накл: ${c.invoiceNumber} | ${c.purchaseAmount}` : '-'}
                                                 </td>
                                             </tr>
                                         );
@@ -434,6 +422,7 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                   <h3 className="text-xl font-bold text-slate-800 uppercase italic mb-6">
                       {isNewPrize ? T.addPrize : T.editPrize}
                   </h3>
+                  {/* Prize Form (Simplified for brevity as it's not the focus of this change) */}
                   <div className="space-y-4">
                       <div>
                           <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{T.title}</label>
@@ -532,6 +521,62 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                   </div>
               )}
 
+              {/* ISSUE CODES SECTION */}
+              <div className="bg-blue-50 border border-blue-100 p-6 rounded-[35px]">
+                  <h4 className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mb-4">{T.issueCodes}</h4>
+                  <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{T.invoiceNum}</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-white p-3 rounded-xl text-xs font-bold text-slate-800 border border-blue-100"
+                                value={issueForm.invoice}
+                                onChange={e => setIssueForm({...issueForm, invoice: e.target.value})}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{T.purchaseSum}</label>
+                            <input 
+                                type="number" 
+                                className="w-full bg-white p-3 rounded-xl text-xs font-bold text-slate-800 border border-blue-100"
+                                value={issueForm.amount}
+                                onChange={e => setIssueForm({...issueForm, amount: e.target.value})}
+                            />
+                          </div>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{T.quantity}</label>
+                        <input 
+                            type="number" 
+                            className="w-full bg-white p-3 rounded-xl text-xs font-bold text-slate-800 border border-blue-100"
+                            value={issueForm.qty}
+                            onChange={e => setIssueForm({...issueForm, qty: e.target.value})}
+                        />
+                      </div>
+                      <button 
+                        onClick={handleIssueCodes}
+                        disabled={loading}
+                        className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl uppercase text-[10px] tracking-widest hover:bg-blue-700 transition"
+                      >
+                          {loading ? '...' : T.issue}
+                      </button>
+                  </div>
+              </div>
+              
+              {/* Issued Codes List */}
+              {userCodes.length > 0 && (
+                   <div className="space-y-2">
+                       <h4 className="text-[9px] font-bold text-slate-300 uppercase tracking-widest px-2">{T.issuedCodes}</h4>
+                       {userCodes.map(c => (
+                           <div key={c.code} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100">
+                               <div className="font-mono font-bold text-slate-700">{c.code}</div>
+                               <div className="text-[10px] text-slate-400">Накл: {c.invoiceNumber || '-'}</div>
+                           </div>
+                       ))}
+                   </div>
+              )}
+
               <div className="grid grid-cols-2 gap-6">
                 <div className="bg-slate-50 p-6 rounded-[35px] text-center border border-slate-100">
                   <div className="text-[9px] font-bold text-slate-300 uppercase mb-2 tracking-widest">Игр</div>
@@ -543,25 +588,6 @@ export const AdminPanel = ({ onBack, onTestGame }: AdminPanelProps) => {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-300 px-4">История</h4>
-                {userResults.length > 0 ? userResults.map((res) => (
-                  <div key={res.id} className="p-8 bg-slate-50/50 rounded-[40px] flex justify-between items-center border border-slate-100">
-                    <div>
-                      <div className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mb-1">{new Date(res.playedAt).toLocaleDateString()}</div>
-                      <div className={`font-bold text-sm ${res.prize ? 'text-blue-500' : 'text-slate-500'}`}>
-                        {res.prize || 'Без приза'}
-                      </div>
-                      <div className="text-[8px] text-slate-200 font-mono mt-2">{res.codeUsed}</div>
-                    </div>
-                    <div className="text-4xl font-thin text-slate-800">{res.score}</div>
-                  </div>
-                )) : (
-                  <div className="text-center py-20 bg-slate-50 rounded-[40px] border border-dashed border-slate-100">
-                    <p className="text-slate-300 font-bold uppercase text-[10px] tracking-widest">Нет игр</p>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

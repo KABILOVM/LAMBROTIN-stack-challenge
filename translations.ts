@@ -33,6 +33,7 @@ export const t = {
     profileTitle: "Личный Кабинет",
     tabPrizes: "Мои Призы",
     tabHistory: "История Игр",
+    tabCodes: "Мои Коды",
     gamesPlayed: "Игр",
     prizesClaimed: "Призы",
     logout: "Выйти из аккаунта",
@@ -53,6 +54,22 @@ export const t = {
     selectCard: "Выберите карту «Ёвар»",
     noGames: "Нет сыгранных игр",
     withoutPrize: "Без приза",
+    promoCode: "Акционный код",
+    noCodes: "Кодов пока нет",
+    playCode: "Играть",
+    trialGame: "Пробная игра",
+    codeGame: "Игра по коду",
+
+    // Delivery Confirmation
+    attention: "ВНИМАНИЕ!",
+    deliveryWarning: "Оформляя доставку, вы ЗАВЕРШАЕТЕ участие в акции.",
+    deliveryHint: "Вы больше не сможете вводить коды и улучшать результат. Акция действует ВЕСЬ ФЕВРАЛЬ.",
+    deliveryAdvice: "Рекомендуем использовать все доступные коды, чтобы набрать максимальный рекорд и получить ценные призы (1 Карта + 1 Ценный приз).",
+    timeLeft: "До конца акции осталось:",
+    days: "дн.",
+    hours: "ч.",
+    confirmFinal: "Всё равно оформить",
+    keepPlaying: "Продолжить играть",
     
     // Rules
     rulesTitle: "Правила",
@@ -60,7 +77,7 @@ export const t = {
     mechanicsDesc: "Стройте башню из блоков. Нажимайте на экран в момент, когда двигающийся блок совпадает с предыдущим.",
     prizesTitle: "Награды",
     importantTitle: "Важно",
-    importantDesc: "Призы доступны только при вводе промо-кода с упаковки! Пробная игра не дает права на призы.",
+    importantDesc: "Призы выдаются на основе вашего РЕКОРДА (лучшего счета)! Введите код, чтобы игра пошла в зачет.",
     
     // Game Over
     gameOver: "Конец Игры",
@@ -68,6 +85,8 @@ export const t = {
     newRecord: "Новый Рекорд!",
     playAgain: "Играть снова",
     menu: "Меню",
+    attemptsLeft: "Осталось попыток",
+    codesAvailable: "Доступно кодов",
     
     // Code
     codeTitle: "Старт",
@@ -100,7 +119,32 @@ export const t = {
     isOutOfStock: "Нет в наличии",
     save: "Сохранить",
     cancel: "Отмена",
-    delete: "Удалить"
+    delete: "Удалить",
+    searchUser: "Поиск пользователя (имя или телефон)",
+    issueCodes: "Выдать коды",
+    invoiceNum: "Номер накладной",
+    purchaseSum: "Сумма покупки",
+    quantity: "Количество",
+    issue: "Выдать",
+    issuedCodes: "Выданные коды",
+    codeGenerated: "Коды успешно выданы",
+
+    // Purchase Rules / Code Modal
+    trialsOverTitle: "Пробные попытки закончились",
+    trialsOverDesc: "Для продолжения игры необходимо получить специальный код.",
+    getCodes: "Получить коды",
+    purchaseRulesTitle: "Получение кодов",
+    purchaseRulesSubtitle: "Закажите продукцию BELINDA на следующую сумму",
+    buyProduct: "Купить продукцию",
+    somoni: "сомони",
+    codeForPlay: "код для игры",
+    codesForPlay: "кодов для игры",
+    tabBuy: "Условия",
+    tabMyCodes: "Мои Коды",
+    statusActive: "Активен",
+    statusUsed: "Использован",
+    date: "Дата",
+    score: "Счет"
   },
   tg: {
     appTitle: "LAMBROTIN",
@@ -133,6 +177,7 @@ export const t = {
     profileTitle: "Утоқи шахсӣ",
     tabPrizes: "Ҷоизаҳои ман",
     tabHistory: "Таърихи бозиҳо",
+    tabCodes: "Кодҳои ман",
     gamesPlayed: "Бозиҳо",
     prizesClaimed: "Ҷоизаҳо",
     logout: "Баромадан",
@@ -153,6 +198,22 @@ export const t = {
     selectCard: "Корти «Ёвар»-ро интихоб кунед",
     noGames: "Бозиҳо нест",
     withoutPrize: "Бе ҷоиза",
+    promoCode: "Коди аксия",
+    noCodes: "Кодҳо нест",
+    playCode: "Бозӣ",
+    trialGame: "Бозии озмоишӣ",
+    codeGame: "Бозӣ бо код",
+
+    // Delivery Confirmation
+    attention: "ДИҚҚАТ!",
+    deliveryWarning: "Бо фиристодани дархост, шумо иштирокро дар аксия ҚАТЪ мекунед.",
+    deliveryHint: "Шумо дигар наметавонед код ворид кунед ва натиҷаатонро беҳтар кунед. Аксия ТО ОХИРИ ФЕВРАЛ давом мекунад.",
+    deliveryAdvice: "Тавсия медиҳем, ки ҳамаи кодҳоро истифода баред, то рекорди баландтарин гузоред ва ҷоизаҳои қиматнок гиред.",
+    timeLeft: "То охири аксия монд:",
+    days: "рӯз",
+    hours: "соат",
+    confirmFinal: "Ба ҳар ҳол фиристодан",
+    keepPlaying: "Идомаи бозӣ",
     
     // Rules
     rulesTitle: "Қоидаҳо",
@@ -160,7 +221,7 @@ export const t = {
     mechanicsDesc: "Бурҷ созед. Вақте ки блоки ҳаракаткунанда бо блоки пешина мувофиқат мекунад, экранро пахш кунед.",
     prizesTitle: "Мукофотҳо",
     importantTitle: "Муҳим",
-    importantDesc: "Ҷоизаҳо танҳо бо ворид кардани код аз қуттӣ дастрасанд! Бозии озмоишӣ ҷоиза надорад.",
+    importantDesc: "Ҷоизаҳо дар асоси РЕКОРДИ (холи беҳтарини) шумо дода мешаванд! Барои сабти натиҷа код ворид кунед.",
     
     // Game Over
     gameOver: "Анҷоми бозӣ",
@@ -168,6 +229,8 @@ export const t = {
     newRecord: "Рекорди нав!",
     playAgain: "Бозӣ кардан",
     menu: "Меню",
+    attemptsLeft: "Кӯшишҳо мондааст",
+    codesAvailable: "Кодҳои дастрас",
     
     // Code
     codeTitle: "Оғоз",
@@ -200,6 +263,31 @@ export const t = {
     isOutOfStock: "Тамом шуд",
     save: "Сабт",
     cancel: "Бекор",
-    delete: "Нест кардан"
+    delete: "Нест кардан",
+    searchUser: "Ҷустуҷӯи корбар",
+    issueCodes: "Додани кодҳо",
+    invoiceNum: "Рақами накладной",
+    purchaseSum: "Маблағи харид",
+    quantity: "Миқдор",
+    issue: "Додан",
+    issuedCodes: "Кодҳои додашуда",
+    codeGenerated: "Кодҳо бомуваффақият дода шуданд",
+
+    // Purchase Rules / Code Modal
+    trialsOverTitle: "Кӯшишҳо ба анҷом расиданд",
+    trialsOverDesc: "Барои идомаи бозӣ шумо бояд коди махсус гиред.",
+    getCodes: "Гирифтани кодҳо",
+    purchaseRulesTitle: "Гирифтани кодҳо",
+    purchaseRulesSubtitle: "Ба маблағи зерин маҳсулоти BELINDA-ро фармоиш диҳед",
+    buyProduct: "Хариди маҳсулот",
+    somoni: "сомонӣ",
+    codeForPlay: "код барои бозӣ",
+    codesForPlay: "код барои бозӣ",
+    tabBuy: "Шартҳо",
+    tabMyCodes: "Кодҳои ман",
+    statusActive: "Фаъол",
+    statusUsed: "Истифода шуд",
+    date: "Сана",
+    score: "Хол"
   }
 };
