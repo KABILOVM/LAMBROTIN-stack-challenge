@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { backend } from '../../services/mockBackend.ts';
 import { CITIES, Language, CodeRequest, PrizeTier } from '../../types.ts';
 import { t } from '../../translations.ts';
+import { LungsLoader } from './LungsLoader.tsx';
 
 const BoltIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -35,7 +36,6 @@ const LockIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
     </svg>
 );
 
-// Added DocumentIcon for PurchaseRulesScreen
 const DocumentIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -91,7 +91,6 @@ export const RegisterScreen = ({ onRegisterSuccess, onAdminLogin, lang, setLang 
             }
         } catch (e: any) {
             setError(e.message);
-        } finally {
             setLoading(false);
         }
     };
@@ -105,6 +104,14 @@ export const RegisterScreen = ({ onRegisterSuccess, onAdminLogin, lang, setLang 
             setAdminError('Неверный пароль администратора');
         }
     };
+
+    if (loading) {
+        return (
+            <div className="w-full h-full flex items-center justify-center bg-slate-50">
+                <LungsLoader size={160} progress={50} />
+            </div>
+        );
+    }
 
     return (
         <div className="w-full min-h-full bg-slate-50 flex flex-col items-center justify-center p-4 md:p-6 antialiased overflow-y-auto">
@@ -208,10 +215,9 @@ export const RegisterScreen = ({ onRegisterSuccess, onAdminLogin, lang, setLang 
 
                     <button 
                         type="submit" 
-                        disabled={loading}
-                        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all mt-4 disabled:opacity-50 uppercase tracking-wider"
+                        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all mt-4 uppercase tracking-wider"
                     >
-                        {loading ? T.loading : (mode === 'register' ? T.registerBtn : T.loginBtn)}
+                        {mode === 'register' ? T.registerBtn : T.loginBtn}
                     </button>
                 </form>
 
@@ -275,12 +281,12 @@ export const RegisterScreen = ({ onRegisterSuccess, onAdminLogin, lang, setLang 
     );
 };
 
-// Missing PurchaseRulesScreen component added to fix import error in App.tsx
 export const PurchaseRulesScreen = ({ lang, userId, onClose, onPlayCode, forceShowUpload }: { lang: Language, userId: string, onClose: () => void, onPlayCode: (code: string) => void, forceShowUpload?: boolean }) => {
     const T = t[lang];
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadSuccess, setUploadSuccess] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [orderPhone, setOrderPhone] = useState('');
@@ -310,14 +316,36 @@ export const PurchaseRulesScreen = ({ lang, userId, onClose, onPlayCode, forceSh
     const handleUpload = async () => {
         if (!selectedFile) return;
         setLoading(true);
+        setUploadProgress(0);
+
+        // Имитация нелинейного прогресса для премиального лоадера
+        const progInterval = setInterval(() => {
+            setUploadProgress(prev => {
+                if (prev >= 92) {
+                    return 92;
+                }
+                const rem = 95 - prev;
+                return prev + (rem * 0.15 * Math.random());
+            });
+        }, 120);
+
         try {
             await backend.uploadCodeRequest(userId, selectedFile);
-            setUploadSuccess(true);
-            setSelectedFile(null);
-            setPreviewUrl(null);
+            
+            // Резкое завершение
+            clearInterval(progInterval);
+            setUploadProgress(100);
+            
+            setTimeout(() => {
+                setUploadSuccess(true);
+                setSelectedFile(null);
+                setPreviewUrl(null);
+                setLoading(false);
+            }, 600);
+            
         } catch (e: any) {
+            clearInterval(progInterval);
             alert(e.message);
-        } finally {
             setLoading(false);
         }
     };
@@ -327,15 +355,11 @@ export const PurchaseRulesScreen = ({ lang, userId, onClose, onPlayCode, forceSh
             <div className="bg-white w-full max-w-lg p-8 md:p-10 rounded-[48px] shadow-2xl relative border border-slate-100 animate-fade-in max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
                 <button onClick={onClose} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 text-3xl font-light transition">&times;</button>
                 
-                <div className="flex flex-col items-center mb-8">
-                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
-                        <DocumentIcon className="w-8 h-8" />
+                {loading ? (
+                    <div className="py-20 flex items-center justify-center">
+                        <LungsLoader size={120} progress={uploadProgress} />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-800 uppercase italic text-center tracking-tight leading-none">{T.purchaseRulesTitle}</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{T.purchaseRulesSubtitle}</p>
-                </div>
-
-                {uploadSuccess ? (
+                ) : uploadSuccess ? (
                     <div className="text-center py-8 space-y-6">
                         <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mx-auto">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={5} className="w-8 h-8"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
@@ -345,72 +369,81 @@ export const PurchaseRulesScreen = ({ lang, userId, onClose, onPlayCode, forceSh
                         <button onClick={onClose} className="w-full py-4 bg-slate-800 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg">Понятно</button>
                     </div>
                 ) : (
-                    <div className="space-y-6">
-                        <div className="space-y-3">
-                            {TIERS.map((tier, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all">
-                                    <div className="flex flex-col">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">{T.amountFrom}</div>
-                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded shadow-sm ${
-                                                tier.tier === 'DIAMOND' ? 'bg-blue-500 text-white' :
-                                                tier.tier === 'GOLD' ? 'bg-yellow-50 text-white' :
-                                                tier.tier === 'SILVER' ? 'bg-slate-400 text-white' :
-                                                tier.tier === 'BRONZE' ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'
-                                            }`}>
-                                                {T[`tier${tier.tier.charAt(0) + tier.tier.slice(1).toLowerCase() as keyof typeof T}` as keyof typeof T]}
-                                            </span>
+                    <>
+                        <div className="flex flex-col items-center mb-8">
+                            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
+                                <DocumentIcon className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 uppercase italic text-center tracking-tight leading-none">{T.purchaseRulesTitle}</h3>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{T.purchaseRulesSubtitle}</p>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="space-y-3">
+                                {TIERS.map((tier, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all">
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">{T.amountFrom}</div>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded shadow-sm ${
+                                                    tier.tier === 'DIAMOND' ? 'bg-blue-500 text-white' :
+                                                    tier.tier === 'GOLD' ? 'bg-yellow-50 text-white' :
+                                                    tier.tier === 'SILVER' ? 'bg-slate-400 text-white' :
+                                                    tier.tier === 'BRONZE' ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'
+                                                }`}>
+                                                    {T[`tier${tier.tier.charAt(0) + tier.tier.slice(1).toLowerCase() as keyof typeof T}` as keyof typeof T]}
+                                                </span>
+                                            </div>
+                                            <span className="text-sm font-black text-slate-800 tracking-tighter">{tier.amount.toLocaleString()} <span className="text-[10px] text-slate-400 font-black">{T.somoni}</span></span>
                                         </div>
-                                        <span className="text-sm font-black text-slate-800 tracking-tighter">{tier.amount.toLocaleString()} <span className="text-[10px] text-slate-400 font-black">{T.somoni}</span></span>
+                                        <div className="text-right">
+                                            <span className="text-[10px] font-black text-slate-400 block mb-0.5 uppercase tracking-wide">{T.willIssue}</span>
+                                            <span className="text-sm font-black text-blue-600 uppercase tracking-tight">{tier.codes} {tier.codes === 1 ? 'код' : 'кодов'}</span>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="text-[10px] font-black text-slate-400 block mb-0.5 uppercase tracking-wide">{T.willIssue}</span>
-                                        <span className="text-sm font-black text-blue-600 uppercase tracking-tight">{tier.codes} {tier.codes === 1 ? 'код' : 'кодов'}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
 
-                        <div className="flex flex-col gap-3">
-                            <a href={`tel:${orderPhone}`} className="w-full py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl uppercase text-[11px] tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all">
-                                <BoltIcon /> {T.orderBtn}
-                            </a>
-                        </div>
+                            <div className="flex flex-col gap-3">
+                                <a href={`tel:${orderPhone}`} className="w-full py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl uppercase text-[11px] tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all">
+                                    <BoltIcon /> {T.orderBtn}
+                                </a>
+                            </div>
 
-                        <div className="pt-6 border-t border-slate-50 text-center">
-                            <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-4 italic">{T.uploadInvoice}</h4>
-                            <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-                            
-                            {previewUrl ? (
-                                <div className="relative inline-block mb-4">
-                                    <img src={previewUrl} className="max-h-40 rounded-xl shadow-lg border border-slate-50" alt="Preview" />
-                                    <button onClick={() => { setPreviewUrl(null); setSelectedFile(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-lg border-2 border-white font-black">&times;</button>
-                                </div>
-                            ) : (
-                                <div 
-                                    className="flex items-center gap-4 py-4 px-5 bg-blue-50/50 rounded-2xl border border-dashed border-blue-200 cursor-pointer group mb-4 transition-all hover:bg-blue-50"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <div className="w-10 h-10 bg-white text-blue-500 rounded-xl flex items-center justify-center group-hover:bg-blue-50 transition-colors shadow-sm">
-                                        <CameraIcon />
+                            <div className="pt-6 border-t border-slate-50 text-center">
+                                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-4 italic">{T.uploadInvoice}</h4>
+                                <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+                                
+                                {previewUrl ? (
+                                    <div className="relative inline-block mb-4">
+                                        <img src={previewUrl} className="max-h-40 rounded-xl shadow-lg border border-slate-50" alt="Preview" />
+                                        <button onClick={() => { setPreviewUrl(null); setSelectedFile(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-lg border-2 border-white font-black">&times;</button>
                                     </div>
-                                    <div className="text-left">
-                                        <p className="text-[11px] text-slate-500 font-black leading-normal uppercase tracking-tight">{T.uploadDesc}</p>
+                                ) : (
+                                    <div 
+                                        className="flex items-center gap-4 py-4 px-5 bg-blue-50/50 rounded-2xl border border-dashed border-blue-200 cursor-pointer group mb-4 transition-all hover:bg-blue-50"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <div className="w-10 h-10 bg-white text-blue-500 rounded-xl flex items-center justify-center group-hover:bg-blue-50 transition-colors shadow-sm">
+                                            <CameraIcon />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-[11px] text-slate-500 font-black leading-normal uppercase tracking-tight">{T.uploadDesc}</p>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {selectedFile && (
-                                <button 
-                                    onClick={handleUpload} 
-                                    disabled={loading}
-                                    className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-100 text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all disabled:opacity-50"
-                                >
-                                    {loading ? T.loading : T.sendPhoto}
-                                </button>
-                            )}
+                                {selectedFile && (
+                                    <button 
+                                        onClick={handleUpload} 
+                                        className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-100 text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all"
+                                    >
+                                        {T.sendPhoto}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    </>
                 )}
             </div>
         </div>

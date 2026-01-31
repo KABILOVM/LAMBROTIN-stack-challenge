@@ -10,6 +10,7 @@ import { sounds } from './services/SoundService.ts';
 import { PrizeIcon } from './components/UI/PrizeIcons.tsx';
 import { MAX_TRIALS } from './constants.ts';
 import { t } from './translations.ts';
+import { LungsLoader } from './components/UI/LungsLoader.tsx';
 
 const BoltIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -77,6 +78,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lang, setLang] = useState<Language>('tg');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
 
   const [activeTab, setActiveTab] = useState<'home' | 'profile'>('home');
   const [profileInitialTab, setProfileInitialTab] = useState<'prizes' | 'history' | 'codes' | 'settings'>('prizes');
@@ -93,19 +95,33 @@ function App() {
   const [isAdminTester, setIsAdminTester] = useState(false);
   const [muted, setMuted] = useState(false);
   const [trialsLeft, setTrialsLeft] = useState(0);
-  const [viewingPrizeId, setViewingPrizeId] = useState<string | null>(null);
   const [unusedCodesCount, setUnusedCodesCount] = useState(0);
   const [showTrialsOverAlert, setShowTrialsOverAlert] = useState(false);
   const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
   
   const [notification, setNotification] = useState<CodeRequest | null>(null);
   
-  // PWA Installation state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const T = t[lang];
 
   useEffect(() => {
+    const interval = setInterval(() => {
+        setLoadProgress(prev => {
+            if (prev >= 92) {
+                clearInterval(interval);
+                setTimeout(() => {
+                    setLoadProgress(100);
+                    setTimeout(() => setIsLoading(false), 600);
+                }, 800);
+                return 92;
+            }
+            const remaining = 95 - prev;
+            const increment = Math.max(0.5, remaining * 0.1 * Math.random());
+            return prev + increment;
+        });
+    }, 150);
+
     const initApp = async () => {
         try {
             const prizesData = await backend.getPrizes();
@@ -127,19 +143,18 @@ function App() {
             }
         } catch (error) {
             console.error("Initialization error:", error);
-        } finally {
-            setIsLoading(false);
         }
     };
 
     initApp();
     setMuted(sounds.isMuted());
 
-    // PWA event listener
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
     });
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleInstallApp = async () => {
@@ -232,7 +247,6 @@ function App() {
   const startTutorial = (c: string | null) => {
     setActiveCode(c);
     setShowTutorial(true);
-    setViewingPrizeId(null);
   };
 
   const startGameAfterTutorial = () => {
@@ -275,10 +289,7 @@ function App() {
   if (isLoading) {
       return (
           <div className="w-full h-full flex items-center justify-center bg-slate-50">
-             <div className="flex flex-col items-center gap-6 animate-pulse">
-                 <BoltIcon className="w-10 h-10 text-blue-500" />
-                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Загрузка...</p>
-             </div>
+             <LungsLoader progress={loadProgress} size={180} />
           </div>
       );
   }
@@ -287,6 +298,24 @@ function App() {
     return <RegisterScreen 
         onRegisterSuccess={async (isNewUser) => {
             setIsLoading(true);
+            setLoadProgress(0);
+            
+            const interval = setInterval(() => {
+                setLoadProgress(prev => {
+                    if (prev >= 92) {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            setLoadProgress(100);
+                            setTimeout(() => setIsLoading(false), 500);
+                        }, 800);
+                        return 92;
+                    }
+                    const remaining = 95 - prev;
+                    const increment = Math.max(1, remaining * 0.2 * Math.random());
+                    return prev + increment;
+                });
+            }, 100);
+            
             const u = await backend.refreshUser();
             if (u) {
                 setCurrentUser(u);
@@ -299,7 +328,6 @@ function App() {
                     setShowWelcomeRules(true);
                 }
             }
-            setIsLoading(false);
         }} 
         onAdminLogin={() => setScreen('admin')} 
         lang={lang}
@@ -317,7 +345,7 @@ function App() {
       <div id="game-background" className="absolute inset-0 bg-gradient-to-b from-[#d6e8f5] to-[#aed9e0]"></div>
       <Suspense fallback={
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
-              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <LungsLoader progress={50} size={120} />
           </div>
       }>
         <BelindaStackGame 
