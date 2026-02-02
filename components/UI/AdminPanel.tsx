@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { backend, compressImage } from '../../services/mockBackend';
-import { PromoCode, GameResult, User, PrizeConfig, CodeRequest, PrizeTier } from '../../types';
+import { PromoCode, GameResult, User, PrizeConfig, CodeRequest, PrizeTier, GameDifficultyConfig } from '../../types';
 import { t } from '../../translations';
 import { PrizeIcon } from './PrizeIcons';
 
@@ -52,6 +52,13 @@ const EyeIcon = ({ visible }: { visible: boolean }) => (
     </svg>
 );
 
+const SettingsIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+
 export const AdminPanel = ({ onBack, onTestGame, onPrizesUpdated }: AdminPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [orderSubTab, setOrderSubTab] = useState<'active' | 'archive'>('active');
@@ -75,6 +82,7 @@ export const AdminPanel = ({ onBack, onTestGame, onPrizesUpdated }: AdminPanelPr
   const [isTierSelectOpen, setIsTierSelectOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orderPhone, setOrderPhone] = useState('');
+  const [gameDifficulty, setGameDifficulty] = useState<GameDifficultyConfig>({ baseSpeed: 0.035, speedIncrement: 0.0025, speedStep: 8, maxSpeed: 0.075 });
   const [genCount, setGenCount] = useState('10');
   const [codeSearch, setCodeSearch] = useState('');
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
@@ -100,6 +108,9 @@ export const AdminPanel = ({ onBack, onTestGame, onPrizesUpdated }: AdminPanelPr
         setUsers(adminStats.users);
         setPrizes(adminStats.prizesConfig);
         setCodes(adminStats.allCodes);
+        if (adminStats.gameConfig) {
+            setGameDifficulty(adminStats.gameConfig);
+        }
         const phone = await backend.getOrderPhone();
         setOrderPhone(phone);
         
@@ -228,12 +239,15 @@ export const AdminPanel = ({ onBack, onTestGame, onPrizesUpdated }: AdminPanelPr
       } catch (e: any) { alert(e.message); } finally { setLoading(false); }
   };
 
-  const handleUpdatePhone = async () => {
+  const handleUpdateSettings = async () => {
       setLoading(true);
       try {
           await backend.updateOrderPhone(orderPhone);
-          alert("Телефон обновлен");
-      } catch (e) {} finally { setLoading(false); }
+          await backend.updateGameConfig(gameDifficulty);
+          alert("Настройки обновлены");
+      } catch (e: any) {
+          alert("Ошибка при сохранении: " + e.message);
+      } finally { setLoading(false); }
   };
 
   const handleGenerateCodes = async () => {
@@ -622,15 +636,56 @@ export const AdminPanel = ({ onBack, onTestGame, onPrizesUpdated }: AdminPanelPr
               )}
 
               {activeTab === 'settings' && (
-                  <div className="space-y-8 animate-fade-in max-w-xl">
-                      <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
-                          <h3 className="text-lg font-black text-slate-800 uppercase italic mb-8">Настройки приложения</h3>
-                          <div className="space-y-6">
-                              <div>
-                                  <label className="text-[10px] font-black text-slate-400 uppercase mb-3 block">Телефон для заказов (TG)</label>
-                                  <input type="text" value={orderPhone} onChange={e => setOrderPhone(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black text-sm outline-none focus:border-blue-400 transition shadow-inner text-slate-900" />
+                  <div className="space-y-8 animate-fade-in max-w-4xl mx-auto">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                          {/* Общие настройки */}
+                          <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
+                              <div className="flex items-center gap-3 mb-8">
+                                  <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><SettingsIcon /></div>
+                                  <h3 className="text-lg font-black text-slate-800 uppercase italic">Общие настройки</h3>
                               </div>
-                              <button onClick={handleUpdatePhone} className="w-full py-5 bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-slate-200 hover:bg-slate-900 transition">Сохранить настройки</button>
+                              <div className="space-y-6">
+                                  <div>
+                                      <label className="text-[10px] font-black text-slate-400 uppercase mb-3 block">Телефон для заказов (TG)</label>
+                                      <input type="text" value={orderPhone} onChange={e => setOrderPhone(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black text-sm outline-none focus:border-blue-400 transition shadow-inner text-slate-900" />
+                                  </div>
+                                  <button onClick={handleUpdateSettings} className="w-full py-5 bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-slate-200 hover:bg-slate-900 transition">Сохранить всё</button>
+                              </div>
+                          </div>
+
+                          {/* Сложность игры */}
+                          <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
+                              <div className="flex items-center gap-3 mb-8">
+                                  <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
+                                  </div>
+                                  <h3 className="text-lg font-black text-slate-800 uppercase italic">Сложность игры</h3>
+                              </div>
+                              <div className="space-y-5">
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                          <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block">Нач. скорость</label>
+                                          <input type="number" step="0.001" value={gameDifficulty.baseSpeed} onChange={e => setGameDifficulty({...gameDifficulty, baseSpeed: parseFloat(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-black text-sm outline-none shadow-inner" />
+                                      </div>
+                                      <div>
+                                          <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block">Прирост скор.</label>
+                                          <input type="number" step="0.0001" value={gameDifficulty.speedIncrement} onChange={e => setGameDifficulty({...gameDifficulty, speedIncrement: parseFloat(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-black text-sm outline-none shadow-inner" />
+                                      </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                          <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block">Ускорение каждые N</label>
+                                          <input type="number" value={gameDifficulty.speedStep} onChange={e => setGameDifficulty({...gameDifficulty, speedStep: parseInt(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-black text-sm outline-none shadow-inner" />
+                                      </div>
+                                      <div>
+                                          <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block">Макс. скорость</label>
+                                          <input type="number" step="0.001" value={gameDifficulty.maxSpeed} onChange={e => setGameDifficulty({...gameDifficulty, maxSpeed: parseFloat(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-black text-sm outline-none shadow-inner" />
+                                      </div>
+                                  </div>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
+                                      Подсказка: Скорость увеличивается на {gameDifficulty.speedIncrement} каждые {gameDifficulty.speedStep} блоков, пока не достигнет {gameDifficulty.maxSpeed}.
+                                  </p>
+                              </div>
                           </div>
                       </div>
                   </div>
@@ -794,7 +849,7 @@ export const AdminPanel = ({ onBack, onTestGame, onPrizesUpdated }: AdminPanelPr
 
       {editingPrize && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl p-6">
-              <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl relative border border-slate-100 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+              <div className="bg-white w-full max-lg rounded-[48px] shadow-2xl relative border border-slate-100 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
                   <button onClick={() => setEditingPrize(null)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 text-3xl font-light transition z-50">&times;</button>
                   
                   <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar flex-1">

@@ -1,6 +1,6 @@
 
 import { supabase } from './supabaseClient';
-import { User, GameResult, PromoCode, PrizeConfig, INITIAL_PRIZES, CodeRequest, PrizeTier } from '../types';
+import { User, GameResult, PromoCode, PrizeConfig, INITIAL_PRIZES, CodeRequest, PrizeTier, GameDifficultyConfig } from '../types';
 
 // Helper for Image Compression & Square Cropping
 export const compressImage = async (input: File | string, cropToSquare: boolean = false): Promise<{data: string, sizeKb: number}> => {
@@ -293,6 +293,21 @@ class MockBackendService {
       return true;
   }
 
+  async getGameConfig(): Promise<GameDifficultyConfig> {
+      const { data, error } = await supabase.from('app_settings').select('value').eq('key', 'game_config').single();
+      const defaultValue: GameDifficultyConfig = { baseSpeed: 0.035, speedIncrement: 0.0025, speedStep: 8, maxSpeed: 0.075 };
+      if (error || !data) return defaultValue;
+      try {
+          return JSON.parse(data.value);
+      } catch (e) {
+          return defaultValue;
+      }
+  }
+
+  async updateGameConfig(config: GameDifficultyConfig) {
+      await supabase.from('app_settings').upsert({ key: 'game_config', value: JSON.stringify(config) });
+  }
+
   async getAdminStats() {
     const { count: usersCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
     const { count: gamesCount } = await supabase.from('game_results').select('*', { count: 'exact', head: true });
@@ -301,8 +316,8 @@ class MockBackendService {
 
     const { data: users } = await supabase.from('users').select('*').order('registered_at', { ascending: false });
     const { data: prizes } = await supabase.from('prize_configs').select('*');
-    // Fetch codes with user names
     const { data: codes } = await supabase.from('promo_codes').select('code, is_used, is_issued, assigned_to, generated_at, invoice_number, purchase_amount, users(name, phone)').order('generated_at', { ascending: true });
+    const gameConfig = await this.getGameConfig();
 
     const usedCodesCount = codes?.filter((c: any) => c.is_used).length || 0;
 
@@ -325,7 +340,8 @@ class MockBackendService {
         totalUsers: usersCount || 0,
         usedCodes: usedCodesCount,
         totalGames: gamesCount || 0,
-        prizesAwarded: {}
+        prizesAwarded: {},
+        gameConfig
     };
   }
 

@@ -5,7 +5,7 @@ import { BelindaStackGame } from './components/Game/BelindaStackGame.tsx';
 import { AdminPanel } from './components/UI/AdminPanel.tsx';
 import { ProfileScreen } from './components/UI/ProfileScreen.tsx';
 import { backend } from './services/mockBackend.ts';
-import { ScreenType, User, GameResult, Language, PrizeConfig, CodeRequest } from './types.ts';
+import { ScreenType, User, GameResult, Language, PrizeConfig, CodeRequest, GameDifficultyConfig } from './types.ts';
 import { sounds } from './services/SoundService.ts';
 import { PrizeIcon } from './components/UI/PrizeIcons.tsx';
 import { MAX_TRIALS } from './constants.ts';
@@ -105,6 +105,7 @@ function App() {
   const [unusedCodesCount, setUnusedCodesCount] = useState(0);
   const [showTrialsOverAlert, setShowTrialsOverAlert] = useState(false);
   const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
+  const [gameDifficulty, setGameDifficulty] = useState<GameDifficultyConfig | undefined>();
   
   const [notification, setNotification] = useState<CodeRequest | null>(null);
   const [leaderboard, setLeaderboard] = useState<{name: string, score: number, city: string}[]>([]);
@@ -119,6 +120,13 @@ function App() {
         const data = await backend.getPrizes();
         setPrizes(data);
     } catch (e) {}
+  };
+
+  const refreshGameConfig = async () => {
+      try {
+          const config = await backend.getGameConfig();
+          setGameDifficulty(config);
+      } catch (e) {}
   };
 
   useEffect(() => {
@@ -141,6 +149,7 @@ function App() {
     const initApp = async () => {
         try {
             await refreshPrizes();
+            await refreshGameConfig();
             
             // ПРОВЕРКА АДМИН-СЕССИИ (Приоритет)
             const isAdminActive = localStorage.getItem('lambrotin_admin_active') === 'true';
@@ -165,8 +174,6 @@ function App() {
                     setNotification(notifs[0]);
                 }
             } else if (isAdminActive) {
-                // Если сессия админа есть, но пользователь разлогинился - это странный случай,
-                // но на всякий случай выводим регистрацию
                 setScreen('register');
                 localStorage.removeItem('lambrotin_admin_active');
             }
@@ -386,7 +393,8 @@ function App() {
         onBack={() => { 
             setScreen('game'); 
             localStorage.removeItem('lambrotin_admin_active');
-            refreshPrizes(); 
+            refreshPrizes();
+            refreshGameConfig();
         }} 
         onTestGame={handleAdminTest} 
         onPrizesUpdated={refreshPrizes}
@@ -407,6 +415,7 @@ function App() {
           onScoreUpdate={handleGameScoreUpdate}
           gameState={gameState}
           onGameStart={() => {}}
+          difficulty={gameDifficulty}
         />
       </Suspense>
 

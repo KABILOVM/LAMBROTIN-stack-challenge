@@ -3,6 +3,13 @@ export type Language = 'ru' | 'tg';
 
 export type PrizeTier = 'BASIC' | 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
 
+export interface GameDifficultyConfig {
+    baseSpeed: number;
+    speedIncrement: number;
+    speedStep: number;
+    maxSpeed: number;
+}
+
 export interface User {
   id: string;
   name: string;

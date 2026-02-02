@@ -1,10 +1,12 @@
 
+/// <reference types="@react-three/fiber" />
 import React, { useState, useRef, useEffect, forwardRef, memo, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GAME_CONFIG } from '../../constants';
 import { sounds as gameSounds } from '../../services/SoundService';
 import { createTopTexture, createSideTexture } from './TextureGen';
+import { GameDifficultyConfig } from '../../types';
 
 interface BlockData {
   position: [number, number, number];
@@ -35,6 +37,7 @@ interface GameProps {
   onScoreUpdate: (score: number, prize: string | null) => void;
   gameState: 'idle' | 'playing' | 'ended';
   onGameStart: () => void;
+  difficulty?: GameDifficultyConfig;
 }
 
 const BG_STAGES = [
@@ -96,8 +99,8 @@ const BlockMesh = memo(({ data }: { data: BlockData }) => {
     new THREE.MeshLambertMaterial({ map: textures.side }), 
   ], [textures, data.color]);
 
+  // Fix: Reference to 'mesh' intrinsic element
   return (
-    /* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */
     <mesh 
       position={data.position} 
       geometry={boxGeo} 
@@ -129,16 +132,14 @@ const DebrisBox = memo(({ data, onComplete }: { data: DebrisData, onComplete: (i
     }
   });
 
+  // Fix: Reference to 'mesh' and 'meshLambertMaterial' intrinsic elements
   return (
-    /* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */
     <mesh 
       ref={meshRef} 
       geometry={boxGeo} 
       scale={[data.size[0], GAME_CONFIG.BOX_HEIGHT, data.size[2]]}
     >
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       <meshLambertMaterial color={data.color} />
-    {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
     </mesh>
   );
 });
@@ -153,14 +154,11 @@ const Wave = memo(({ data }: { data: WaveData }) => {
     (meshRef.current.material as THREE.MeshBasicMaterial).opacity -= d * 2;
   });
 
+  // Fix: Reference to 'mesh', 'ringGeometry' and 'meshBasicMaterial' intrinsic elements
   return (
-    /* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */
     <mesh position={data.position} rotation={[-Math.PI / 2, 0, 0]} ref={meshRef}>
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       <ringGeometry args={[1, 1.1, 16]} />
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
-    {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
     </mesh>
   );
 });
@@ -196,8 +194,8 @@ const ActiveBox = forwardRef<THREE.Vector3, { data: BlockData, direction: 'x' | 
     }
   });
 
+  // Fix: Reference to 'mesh' intrinsic element
   return (
-    /* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */
     <mesh 
       ref={meshRef} 
       position={props.data.position} 
@@ -208,7 +206,7 @@ const ActiveBox = forwardRef<THREE.Vector3, { data: BlockData, direction: 'x' | 
   );
 });
 
-const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameProps & { triggerClick: React.MutableRefObject<() => void> }) => {
+const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick, difficulty }: GameProps & { triggerClick: React.MutableRefObject<() => void> }) => {
   const [stack, setStack] = useState<BlockData[]>([]);
   const [debris, setDebris] = useState<DebrisData[]>([]);
   const [waves, setWaves] = useState<WaveData[]>([]);
@@ -220,6 +218,8 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
   const lastBGUpdateScore = useRef(-1);
   const reuseVector = useRef(new THREE.Vector3());
   
+  const currentDiff = difficulty || { baseSpeed: 0.035, speedIncrement: 0.0025, speedStep: 8, maxSpeed: 0.075 };
+
   const initGame = () => {
     scoreRef.current = 0;
     setDebris([]);
@@ -251,8 +251,8 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
   const spawnNext = (prev: BlockData) => {
     const idx = prev.index + 1;
     const dir = idx % 2 === 0 ? 'x' : 'z';
-    const speedStep = Math.floor(idx / 8);
-    const currentSpeed = Math.min(GAME_CONFIG.MAX_SPEED, GAME_CONFIG.BASE_SPEED + (speedStep * GAME_CONFIG.BASE_SPEED_INCREMENT));
+    const speedLevel = Math.floor(idx / currentDiff.speedStep);
+    const currentSpeed = Math.min(currentDiff.maxSpeed, currentDiff.baseSpeed + (speedLevel * currentDiff.speedIncrement));
     
     setActiveConfig({ 
       data: { position: [prev.position[0], prev.position[1] + GAME_CONFIG.BOX_HEIGHT, prev.position[2]], size: [prev.size[0], prev.size[1], prev.size[2]], color: getBlockColor(idx), index: idx },
@@ -351,16 +351,13 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
     state.camera.lookAt(camLookAt.current);
   });
 
+  // Fix: Reference to light and group intrinsic elements
   return (
     <>
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       <ambientLight intensity={1.5} />
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       <directionalLight position={[5, 15, 5]} intensity={1.2} />
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       <group>
           {stack.map(b => <BlockMesh key={b.index} data={b} />)}
-      {/* @ts-ignore - R3F intrinsic elements may not be recognized in some TS configurations */}
       </group>
       {debris.map(d => <DebrisBox key={d.id} data={d} onComplete={removeDebris} />)}
       {waves.map(w => <Wave key={w.id} data={w} />)}
@@ -371,7 +368,7 @@ const GameScene = ({ onGameOver, onScoreUpdate, gameState, triggerClick }: GameP
   );
 };
 
-export const BelindaStackGame = ({ onGameOver, onScoreUpdate, gameState, onGameStart }: GameProps) => {
+export const BelindaStackGame = ({ onGameOver, onScoreUpdate, gameState, onGameStart, difficulty }: GameProps) => {
   const triggerClickRef = useRef(() => {});
   return (
     <div className="w-full h-full" onClick={() => triggerClickRef.current()}>
@@ -391,6 +388,7 @@ export const BelindaStackGame = ({ onGameOver, onScoreUpdate, gameState, onGameS
             gameState={gameState} 
             onGameStart={onGameStart}
             triggerClick={triggerClickRef}
+            difficulty={difficulty}
         />
       </Canvas>
     </div>
