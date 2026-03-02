@@ -82,8 +82,8 @@ const Countdown = ({ lang }: { lang: Language }) => {
         const calculateTimeLeft = () => {
             const now = new Date();
             const currentYear = now.getFullYear();
-            const endOfFeb = new Date(currentYear, 2, 0, 23, 59, 59); 
-            const difference = endOfFeb.getTime() - now.getTime();
+            const endOfMay = new Date(currentYear, 2, 0, 23, 59, 59); 
+            const difference = endOfMay.getTime() - now.getTime();
             if (difference > 0) {
                 setTimeLeft({
                     days: Math.floor(difference / (1000 * 60 * 60 * 24)),
